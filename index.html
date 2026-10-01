@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Notes</title>
+    <style>
+      body { max-width: 48rem; margin: 3rem auto; padding: 0 1rem; font: 1rem/1.5 system-ui, sans-serif; }
+      li { margin: 0.5rem 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Notes</h1>
+      <p id="status">Loading pages…</p>
+      <ul id="pages"></ul>
+    </main>
+    <script>
+      const status = document.querySelector('#status');
+      const pages = document.querySelector('#pages');
+
+      fetch('https://api.github.com/repos/ralphbean/notes/contents')
+        .then((response) => {
+          if (!response.ok) throw new Error(`GitHub API returned ${response.status}`);
+          return response.json();
+        })
+        .then((files) => {
+          const htmlFiles = files
+            .filter((file) => file.type === 'file' && file.name.toLowerCase().endsWith('.html') && file.name.toLowerCase() !== 'index.html')
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+          for (const file of htmlFiles) {
+            const item = document.createElement('li');
+            const link = document.createElement('a');
+            link.href = `./${encodeURIComponent(file.name)}`;
+            link.textContent = file.name;
+            item.append(link);
+            pages.append(item);
+          }
+
+          status.textContent = htmlFiles.length ? '' : 'No other HTML pages yet.';
+        })
+        .catch((error) => {
+          status.textContent = `Could not load the page list: ${error.message}`;
+        });
+    </script>
+  </body>
+</html>
