@@ -1,1253 +1,251 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fullsend Dispatch Architecture: GitHub vs GitLab</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    :root {
-      --bg:          #ffffff;
-      --bg-surface:  #f6f8fa;
-      --text:        #1f2328;
-      --text-sec:    #656d76;
-      --border:      #d0d7de;
-      --accent:      #0969da;
-      --green:       #1a7f37;
-      --green-bg:    #dafbe1;
-      --red:         #cf222e;
-      --red-bg:      #ffebe9;
-      --yellow:      #bf8700;
-      --yellow-bg:   #fff8c5;
-      --purple:      #8250df;
-      --purple-bg:   #fbefff;
-      --neutral-bg:  #eaeef2;
-      --gh-color:    #0969da;
-      --gl-color:    #e24329;
-      --gl-color-bg: #fef0ec;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg:          #0d1117;
-        --bg-surface:  #161b22;
-        --text:        #e6edf3;
-        --text-sec:    #8b949e;
-        --border:      #30363d;
-        --accent:      #58a6ff;
-        --green:       #3fb950;
-        --green-bg:    #0f2d16;
-        --red:         #f85149;
-        --red-bg:      #3d1114;
-        --yellow:      #d29922;
-        --yellow-bg:   #2e2206;
-        --purple:      #bc8cff;
-        --purple-bg:   #271a3a;
-        --neutral-bg:  #21262d;
-        --gh-color:    #58a6ff;
-        --gl-color:    #fc6d26;
-        --gl-color-bg: #2e1a0f;
-      }
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-                   "Helvetica Neue", Arial, sans-serif;
-      font-size: 16px;
-      line-height: 1.6;
-      color: var(--text);
-      background: var(--bg);
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem 4rem;
-    }
-    code, pre {
-      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-      font-size: 0.875em;
-    }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-
-    .report-header { margin-bottom: 2rem; }
-    .report-header h1 {
-      font-size: 1.75rem;
-      font-weight: 700;
-      line-height: 1.3;
-      margin-bottom: 0.5rem;
-    }
-    .report-meta {
-      color: var(--text-sec);
-      font-size: 0.875rem;
-      margin-bottom: 0.75rem;
-    }
-    .report-meta span + span::before { content: " · "; }
-
-    .badges { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 0.125rem 0.625rem;
-      border-radius: 2rem;
-      font-size: 0.75rem;
-      font-weight: 600;
-      line-height: 1.5;
-    }
-    .badge-green  { background: var(--green-bg);  color: var(--green); }
-    .badge-red    { background: var(--red-bg);    color: var(--red); }
-    .badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
-    .badge-purple { background: var(--purple-bg); color: var(--purple); }
-    .badge-neutral { background: var(--neutral-bg); color: var(--text-sec); }
-
-    .toc {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 1rem 1.25rem;
-      margin-bottom: 2rem;
-    }
-    .toc-title {
-      font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-sec);
-      margin-bottom: 0.5rem;
-    }
-    .toc ol { list-style: decimal; padding-left: 1.25rem; margin: 0; }
-    .toc li { padding: 0.125rem 0; font-size: 0.875rem; }
-
-    .section { margin-bottom: 2.5rem; }
-    .section h2 {
-      font-size: 1.25rem;
-      font-weight: 600;
-      padding-bottom: 0.375rem;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 1rem;
-    }
-    .section h3 {
-      font-size: 1rem;
-      font-weight: 600;
-      margin: 1.25rem 0 0.5rem;
-    }
-    .section p { margin-bottom: 0.75rem; }
-    .section ul, .section ol { padding-left: 1.5rem; margin-bottom: 0.75rem; }
-    .section li { margin-bottom: 0.25rem; }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.8125rem;
-      margin-bottom: 1rem;
-    }
-    th {
-      text-align: left;
-      padding: 0.5rem 0.75rem;
-      border-bottom: 2px solid var(--border);
-      font-weight: 600;
-      color: var(--text-sec);
-      font-size: 0.6875rem;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-    }
-    td {
-      padding: 0.5rem 0.75rem;
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
-    }
-    tr:nth-child(even) td { background: var(--bg-surface); }
-
-    .finding {
-      border: 1px solid var(--border);
-      border-left-width: 4px;
-      border-radius: 6px;
-      padding: 0.75rem 1rem;
-      margin-bottom: 0.75rem;
-      position: relative;
-    }
-    .finding-high    { border-left-color: var(--red); }
-    .finding-medium  { border-left-color: var(--yellow); }
-    .finding-low     { border-left-color: var(--green); }
-    .finding-resolved { border-left-color: var(--purple); }
-    .finding-title {
-      font-weight: 600;
-      margin-bottom: 0.25rem;
-      padding-right: 5rem;
-    }
-    .finding-body {
-      font-size: 0.875rem;
-      color: var(--text-sec);
-    }
-    .finding .badge {
-      position: absolute;
-      top: 0.75rem;
-      right: 0.75rem;
-    }
-
-    .timeline { position: relative; padding-left: 1.5rem; }
-    .timeline::before {
-      content: "";
-      position: absolute;
-      left: 0.35rem;
-      top: 0.25rem;
-      bottom: 0.25rem;
-      width: 2px;
-      background: var(--border);
-    }
-    .timeline-entry {
-      position: relative;
-      margin-bottom: 1rem;
-      padding-left: 0.75rem;
-    }
-    .timeline-entry::before {
-      content: "";
-      position: absolute;
-      left: -1.25rem;
-      top: 0.5rem;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--accent);
-      border: 2px solid var(--bg);
-    }
-    .timeline-entry.superseded::before { background: var(--text-sec); }
-    .timeline-entry.planned::before { background: var(--yellow); }
-    .timeline-entry.open-risk::before { background: var(--red); }
-    .timeline-date {
-      font-size: 0.75rem;
-      color: var(--text-sec);
-      font-weight: 600;
-    }
-    .timeline-title { font-weight: 600; margin: 0.125rem 0; }
-    .timeline-body { font-size: 0.875rem; color: var(--text-sec); }
-
-    code:not(pre code) {
-      background: var(--bg-surface);
-      padding: 0.125rem 0.375rem;
-      border-radius: 4px;
-      font-size: 0.8125rem;
-    }
-
-    /* === ARCHITECTURE DIAGRAM === */
-    .arch-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1.5rem;
-      margin: 1.5rem 0;
-    }
-    @media (max-width: 768px) {
-      .arch-grid { grid-template-columns: 1fr; }
-    }
-    .arch-col {
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1rem;
-      background: var(--bg-surface);
-    }
-    .arch-col h4 {
-      font-size: 0.875rem;
-      font-weight: 700;
-      margin-bottom: 1rem;
-      padding-bottom: 0.5rem;
-      border-bottom: 2px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    .arch-col.gh h4 { border-bottom-color: var(--gh-color); color: var(--gh-color); }
-    .arch-col.gl h4 { border-bottom-color: var(--gl-color); color: var(--gl-color); }
-
-    .arch-node {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 0.5rem 0.75rem;
-      margin-bottom: 0.375rem;
-      font-size: 0.8125rem;
-      position: relative;
-    }
-    .arch-node .node-label {
-      font-weight: 600;
-      display: block;
-    }
-    .arch-node .node-detail {
-      font-size: 0.75rem;
-      color: var(--text-sec);
-      display: block;
-      margin-top: 0.125rem;
-    }
-    .arch-node.current {
-      border-left: 3px solid var(--green);
-    }
-    .arch-node.planned {
-      border-left: 3px solid var(--yellow);
-      border-style: dashed;
-      border-left-style: solid;
-    }
-    .arch-node.open-risk {
-      border-left: 3px solid var(--red);
-      border-style: dashed;
-      border-left-style: solid;
-    }
-    .arch-node.shared {
-      border-left: 3px solid var(--purple);
-    }
-    .arch-connector {
-      text-align: center;
-      color: var(--text-sec);
-      font-size: 0.875rem;
-      padding: 0.125rem 0;
-      position: relative;
-    }
-    .arch-connector.branch {
-      display: flex;
-      gap: 0.5rem;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.75rem;
-    }
-    .arch-group {
-      border: 1px dashed var(--border);
-      border-radius: 6px;
-      padding: 0.5rem;
-      margin-bottom: 0.375rem;
-    }
-    .arch-group-label {
-      font-size: 0.6875rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-sec);
-      margin-bottom: 0.375rem;
-    }
-    .arch-parallel {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 0.375rem;
-    }
-    .arch-parallel .arch-node { margin-bottom: 0; }
-
-    /* === LEGEND === */
-    .legend {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 1rem;
-      margin: 1rem 0 1.5rem;
-      padding: 0.75rem 1rem;
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      font-size: 0.75rem;
-    }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 0.375rem;
-    }
-    .legend-swatch {
-      width: 14px;
-      height: 14px;
-      border-radius: 3px;
-      border: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    .legend-swatch.current { border-left: 3px solid var(--green); }
-    .legend-swatch.planned { border-left: 3px solid var(--yellow); border-style: dashed; border-left-style: solid; }
-    .legend-swatch.open-risk { border-left: 3px solid var(--red); border-style: dashed; border-left-style: solid; }
-    .legend-swatch.shared { border-left: 3px solid var(--purple); }
-
-    /* === LATENCY TABLE === */
-    .latency-fast { color: var(--green); font-weight: 600; }
-    .latency-slow { color: var(--yellow); font-weight: 600; }
-    .latency-none { color: var(--text-sec); font-style: italic; }
-
-    /* === SECURITY COMPARISON === */
-    .sec-row {
-      display: grid;
-      grid-template-columns: 160px 1fr 1fr;
-      gap: 0;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.8125rem;
-    }
-    .sec-row:first-child {
-      border-bottom: 2px solid var(--border);
-      font-weight: 600;
-      font-size: 0.6875rem;
-      text-transform: uppercase;
-      letter-spacing: 0.03em;
-      color: var(--text-sec);
-    }
-    .sec-cell {
-      padding: 0.5rem 0.75rem;
-      vertical-align: top;
-    }
-    .sec-cell:not(:last-child) {
-      border-right: 1px solid var(--border);
-    }
-    .sec-row:nth-child(even) .sec-cell { background: var(--bg-surface); }
-
-    @media print {
-      body { max-width: 100%; padding: 0; font-size: 11pt; }
-      .toc, .section, .finding, pre, table, .arch-grid { break-inside: avoid; }
-      a { color: var(--text); }
-    }
-  </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fullsend Dispatch Architecture: GitHub, GitLab, and Centralized Kubernetes</title>
+<style>
+:root{color-scheme:light dark;--bg:#fff;--surface:#f6f8fa;--text:#1f2328;--muted:#59636e;--border:#d0d7de;--link:#0969da;--gh:#0969da;--gl:#e24329;--k8s:#326ce5;--good:#1a7f37;--good-bg:#dafbe1;--proposed-bg:#eef3ff;--open:#9a6700;--open-bg:#fff8c5;--note:#f1f6fc;--code:#eaeef2}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--surface:#161b22;--text:#e6edf3;--muted:#9da7b3;--border:#30363d;--link:#58a6ff;--gh:#58a6ff;--gl:#ff8066;--k8s:#8baeff;--good:#3fb950;--good-bg:#0f2d16;--proposed-bg:#182440;--open:#d29922;--open-bg:#2e2206;--note:#111d2b;--code:#21262d}}
+*{box-sizing:border-box}body{margin:0 auto;padding:2rem 1.5rem 5rem;max-width:1540px;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline}h1,h2,h3,h4{line-height:1.25}h1{font-size:2rem;margin:.3rem 0 .5rem}h2{font-size:1.45rem;margin:2.5rem 0 1rem;border-bottom:1px solid var(--border);padding-bottom:.5rem}h3{font-size:1.12rem;margin:1.5rem 0 .65rem}p{margin:.45rem 0 .85rem}.meta,.muted{color:var(--muted);font-size:.9rem}.meta span+span:before{content:" · "}.lede{font-size:1.1rem;max-width:100ch}.scope,.note,.phase,.glossary{border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:1rem 1.15rem;margin:1rem 0}.scope{border-left:4px solid var(--k8s)}.phase.pilot{border-left:4px solid var(--good)}.phase.active{border-left:4px solid var(--k8s)}.phase h3,.scope h2,.note h3{margin-top:0}.tag{display:inline-block;border-radius:999px;background:var(--proposed-bg);color:var(--k8s);padding:.08rem .5rem;font-size:.72rem;font-weight:700;vertical-align:.1em}.tag.current{background:var(--good-bg);color:var(--good)}.tag.open{background:var(--open-bg);color:var(--open)}.toc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;margin:1.5rem 0}.toc strong{display:block;text-transform:uppercase;letter-spacing:.06em;font-size:.75rem;color:var(--muted);margin-bottom:.35rem}.toc ol{columns:2;column-gap:3rem;margin:.25rem 0;padding-left:1.3rem}.toc li{break-inside:avoid;padding:.12rem 0}.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:7px;margin:.75rem 0 1.25rem}.table-wrap table{margin:0;min-width:760px}.table-wrap.wide table{min-width:1200px}table{border-collapse:collapse;width:100%;font-size:.88rem}th,td{text-align:left;vertical-align:top;padding:.62rem .72rem;border-bottom:1px solid var(--border)}th{font-size:.74rem;letter-spacing:.035em;text-transform:uppercase;color:var(--muted);background:var(--surface)}tbody tr:nth-child(even){background:color-mix(in srgb,var(--surface) 45%,var(--bg))}tbody tr:last-child td{border-bottom:0}td:first-child{font-weight:620;min-width:150px}td,th{overflow-wrap:anywhere}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}code{font: .88em ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--code);border-radius:4px;padding:.08rem .25rem}.flow-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem;margin:1rem 0}.flow-card{border:1px solid var(--border);border-radius:9px;background:var(--surface);padding:1rem;min-width:0}.flow-card h4{margin:0 0 .8rem;font-size:1rem;display:flex;align-items:center;gap:.55rem}.flow-card.gh{border-top:4px solid var(--gh)}.flow-card.gl{border-top:4px solid var(--gl)}.flow-card.k8s{border-top:4px solid var(--k8s)}.flow-card.gh h4{color:var(--gh)}.flow-card.gl h4{color:var(--gl)}.flow-card.k8s h4{color:var(--k8s)}.flow-card h4 .tag{color:var(--k8s)}.flow-step{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.6rem .7rem;margin:.4rem 0;font-size:.9rem}.flow-step strong{display:block}.step-arrow{text-align:center;color:var(--muted);line-height:1.2}.flow-caption{font-size:.8rem;color:var(--muted);padding:.25rem .15rem}.side-input{border:1px dashed var(--border);padding:.55rem .7rem;border-radius:6px;font-size:.83rem;margin:.55rem 0;background:var(--note)}.outcome{border-radius:6px;padding:.55rem .7rem;background:var(--good-bg);color:var(--good);font-size:.84rem;margin-top:.65rem}.legend{display:flex;gap:1rem;flex-wrap:wrap;color:var(--muted);font-size:.83rem}.kube-wheel{width:20px;height:20px;flex:none}.phase-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.small{font-size:.84rem}.example-record{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:.85rem;font: .82rem/1.55 ui-monospace,SFMono-Regular,Consolas,monospace}.decision{font-weight:650}details{border:1px solid var(--border);border-radius:8px;padding:.9rem 1rem;margin:1.5rem 0;background:var(--surface)}summary{cursor:pointer;font-weight:650}details iframe{display:block;width:100%;height:900px;background:white;border:1px solid var(--border);margin-top:.75rem}.footnote{border-top:1px solid var(--border);margin-top:3rem;padding-top:1rem;color:var(--muted);font-size:.85rem}
+@media(max-width:900px){body{padding:1.2rem .9rem 3rem}.flow-grid{grid-template-columns:1fr}.phase-grid{grid-template-columns:1fr}.toc ol{columns:1}h1{font-size:1.65rem}}
+@media print{body{max-width:none;padding:.3in;color:#111;background:#fff;font-size:10pt}.table-wrap{overflow:visible;border:0}.table-wrap table,.table-wrap.wide table{min-width:0;font-size:8pt}.flow-grid{grid-template-columns:repeat(3,1fr);gap:.3rem}.flow-card{break-inside:avoid}.phase-grid{grid-template-columns:1fr 1fr}details{display:none}a{color:#111;text-decoration:underline}}
+</style>
 </head>
 <body>
-  <header class="report-header">
-    <h1>Fullsend Dispatch Architecture: GitHub vs GitLab</h1>
-    <div class="report-meta">
-      <span><a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a> context</span>
-      <span>2026-09-30</span>
-      <span>Current state + in-flight work</span>
-    </div>
-    <div class="badges">
-      <span class="badge badge-green">7 current ADRs</span>
-      <span class="badge badge-yellow">5 in-flight ADRs</span>
-      <span class="badge badge-red">2 open risks</span>
-      <span class="badge badge-neutral">2 platforms</span>
-    </div>
-  </header>
+<header id="top">
+<h1>Fullsend Dispatch Architecture: GitHub, GitLab, and Centralized Kubernetes</h1>
+<p class="meta"><span>Revised 2026-10-01</span><span>Source baseline: <code>d462a93207302c4c2385e5f6eaa1bd40f45f6e98</code></span><span>Backlog snapshot: 2026-10-01</span></p>
+<p class="lede">GitHub Actions and GitLab CI currently deliver repository work to Fullsend agents. The centralized Kubernetes proposal keeps the forge or tracker as the source of work while Fullsend owns candidate handling, selection, admission, and Job launch.</p>
+<div class="scope"><strong>How to read this revision.</strong> Current implementation, accepted decisions, proposed behavior, and unresolved choices are identified in context. The original September 30 report is preserved verbatim in the historical report at the end of this page. Current details are integrated into the main text, without separate callout boxes. <a href="dispatch-architecture-github-gitlab-original-2026-09-30.html">Open the original report file</a>. The Kubernetes column describes a centralized execution environment, not a third forge.</div>
+</header>
+<nav class="toc" aria-label="Contents"><strong>Contents</strong><ol>
+<li><a href="#summary">Summary</a></li><li><a href="#architecture">Architecture flows</a></li><li><a href="#worked-example">Worked example</a></li><li><a href="#components">Component comparison</a></li><li><a href="#responsibilities-ci">Responsibilities currently supplied by CI</a></li><li><a href="#state-identity-recovery">State, identity, and recovery</a></li><li><a href="#security">Security model</a></li><li><a href="#credentials">Credential model</a></li><li><a href="#events">Event coverage and latency</a></li><li><a href="#evolution-backlog">Evolution and backlog</a></li><li><a href="#adr-evolution">ADR history</a></li><li><a href="#ship-gates">Ship gates</a></li><li><a href="#open-decisions">Open decisions</a></li>
+</ol></nav>
+<main>
+<section id="summary">
+<h2>Summary</h2>
+<p>The repository deployments use CI to deliver source events, orchestrate agent runs, and supply execution context. GitHub uses reusable Actions workflows and GitLab currently uses scheduled polling and API-triggered pipelines. Jira is an existing tracker source. These sources remain responsible for entity state and permissions.</p>
+<p><span class="tag">Proposal</span> The centralized Kubernetes deployment retains source adapters, normalization, authorization, harness selection, and <code>fullsend run</code>. Fullsend takes responsibility for coordinating discovery through run admission; a trusted launcher creates Kubernetes Jobs. The pilot uses a single poller and dispatcher with direct candidate handoff. Active-active operation adds shared durable coordination around the same selection and launch logic. A webhook receiver can become another candidate producer without becoming another dispatcher.</p>
+<p>The plan is to evolve existing Fullsend components: keep repository installations working, separate discovery from launch, adapt selection for independently evaluated contexts, and add a centralized launcher around the existing runner. A Job Pod and its remote OpenShell sandbox are distinct workloads.</p>
+</section>
+<section id="architecture">
+<h2>Architecture flows</h2>
+<p>The five layers describe equivalent questions in all three columns. GitHub and GitLab columns show repository CI; Kubernetes is the proposed centralized execution platform. A box is an operation or component, arrows show transfer, and side notes identify configuration or implementation boundaries.</p>
+<div class="legend"><span><span class="tag current">Current</span> in pinned source</span><span><span class="tag">Proposed</span> centralized Kubernetes design</span><span><span class="tag open">Open</span> unresolved policy</span></div>
+<h3>Layer 1 — Entry points: What causes Fullsend to consider work?</h3>
+<div class="flow-grid">
+<article class="flow-card gh"><h4><svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub Actions</h4><div class="flow-step"><strong>Workflow event</strong>Platform event context invokes the enrolled repository workflow and shared <code>workflow_call</code> dispatcher.</div><div class="flow-step"><strong>Scheduled tasks</strong>Separate schedules run prioritize and scribe.</div><div class="flow-caption">Actions workflow context is not an externally operated GitHub App webhook receiver. The App webhook secret is not a Fullsend dispatch credential.</div><div class="outcome">Output: workflow event context for dispatch.</div></article>
+<article class="flow-card gl"><h4><svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M15.97 9.058l-.895-2.756L13.3.842a.312.312 0 00-.592 0L10.93 6.302H5.07L3.292.842a.312.312 0 00-.592 0L.925 6.302.03 9.058a.624.624 0 00.227.698L8 15.178l7.743-5.422a.624.624 0 00.227-.698"/></svg>GitLab CI</h4><div class="flow-step"><strong>Scheduled pollers</strong>Slash-command and event pollers discover source activity on separate schedules.</div><div class="flow-step"><strong>Pipeline API</strong>Poller invokes the agent pipeline through GitLab’s API. The native MR pipeline was removed in #7322.</div><div class="flow-caption">ADR 0125 describes a webhook direction; it is not the current scaffold implementation. A private receiver for the centralized deployment is a separate proposal.</div><div class="outcome">Output: discovered activity or a pipeline request.</div></article>
+<article class="flow-card k8s"><h4><svg class="kube-wheel" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 9.4V4.8M14.25 10.7l4-2.3M14.25 13.3l4 2.3M12 14.6v4.6M9.75 13.3l-4 2.3M9.75 10.7l-4-2.3"/><circle cx="12" cy="3.2" r="1.5" fill="currentColor"/><circle cx="20.1" cy="7.2" r="1.5" fill="currentColor"/><circle cx="20.1" cy="16.8" r="1.5" fill="currentColor"/><circle cx="12" cy="20.8" r="1.5" fill="currentColor"/><circle cx="3.9" cy="16.8" r="1.5" fill="currentColor"/><circle cx="3.9" cy="7.2" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/></svg>Centralized Kubernetes <span class="tag">Proposed</span></h4><div class="flow-step"><strong>Scheduled source poller</strong>Uses registered source credentials to discover candidate references.</div><div class="step-arrow">↓ shared candidate handoff</div><div class="flow-step"><strong>Later: authenticated webhook receiver</strong>Verifies delivery and emits the same candidate reference. It does not select agents.</div><div class="flow-caption">Webhook delivery must use an approved private deployment; public cluster ingress is excluded. Manual initiation and replay policy remain open.</div><div class="outcome">Output: candidate reference; source and route stay configurable.</div></article>
+</div>
+<h3>Layer 2 — Normalization: How does source-specific input become shared evaluation input?</h3>
+<div class="flow-grid">
+<article class="flow-card gh"><h4>GitHub Actions</h4><div class="flow-step"><strong>Shim workflow</strong>Reads the event context and invokes the shared dispatcher.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Normalize</strong>Existing input conversion produces dispatch data for harness evaluation.</div><div class="outcome">Output: normalized event and repository context.</div></article>
+<article class="flow-card gl"><h4>GitLab CI</h4><div class="flow-step"><strong>Poller and API enrichment</strong>Reads current entities and activity from GitLab.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Convert</strong>Existing conversion produces the current event shape for the Go router.</div><div class="outcome">Output: source-enriched event for stage routing.</div></article>
+<article class="flow-card k8s"><h4><svg class="kube-wheel" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 9.4V4.8M14.25 10.7l4-2.3M14.25 13.3l4 2.3M12 14.6v4.6M9.75 13.3l-4 2.3M9.75 10.7l-4-2.3"/><circle cx="12" cy="3.2" r="1.5" fill="currentColor"/><circle cx="20.1" cy="7.2" r="1.5" fill="currentColor"/><circle cx="20.1" cy="16.8" r="1.5" fill="currentColor"/><circle cx="12" cy="20.8" r="1.5" fill="currentColor"/><circle cx="3.9" cy="16.8" r="1.5" fill="currentColor"/><circle cx="3.9" cy="7.2" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/></svg>Centralized Kubernetes <span class="tag">Proposed</span></h4><div class="flow-step"><strong>Source adapter</strong>Uses trusted tenant/source registration to select API and conversion logic.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Fetch and enrich</strong>Reads current entity, relevant activity, and actor permission evidence.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Normalize for routing</strong>Adapts existing conversion code to a proposed entity/activity input.</div><div class="side-input"><strong>Configuration input:</strong> registered source and selected configuration revision enter the adapter and remain bound to this evaluation.</div><div class="outcome">Output: normalized entity/activity and actor context, ready for selection.</div></article>
+</div>
+<p class="small">A provider observation identity is different from the current entity snapshot. Fresh state does not prove that a claimed historical transition occurred; event-time binding and replay policy are discussed under <a href="#state-identity-recovery">State, identity, and recovery</a> and <a href="#security">Security</a>.</p>
+<h3>Layer 3 — Routing: Which agents should run in which contexts?</h3>
+<div class="flow-grid">
+<article class="flow-card gh"><h4>GitHub Actions</h4><div class="flow-step"><strong>Legacy shell routing</strong>Routes first-party agent stages.</div><div class="step-arrow">+</div><div class="flow-step"><strong>CEL harness evaluation</strong>Evaluates registered harness triggers for supported dispatch inputs.</div><div class="outcome">Output: one or more workflow dispatches after authorization.</div></article>
+<article class="flow-card gl"><h4>GitLab CI</h4><div class="flow-step"><strong>Current Go router</strong>Routes supported labels, merges, comments, and slash commands.</div><div class="flow-step"><strong>Desired CEL evaluation</strong>ADR direction exists, but the current GitLab poller is not wired to CEL selection.</div><div class="outcome">Output: selected stage in the current router.</div></article>
+<article class="flow-card k8s"><h4><svg class="kube-wheel" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 9.4V4.8M14.25 10.7l4-2.3M14.25 13.3l4 2.3M12 14.6v4.6M9.75 13.3l-4 2.3M9.75 10.7l-4-2.3"/><circle cx="12" cy="3.2" r="1.5" fill="currentColor"/><circle cx="20.1" cy="7.2" r="1.5" fill="currentColor"/><circle cx="20.1" cy="16.8" r="1.5" fill="currentColor"/><circle cx="12" cy="20.8" r="1.5" fill="currentColor"/><circle cx="3.9" cy="16.8" r="1.5" fill="currentColor"/><circle cx="3.9" cy="7.2" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/></svg>Centralized Kubernetes <span class="tag">Proposed</span></h4><div class="flow-step"><strong>Resolve applicable contexts</strong>Use configured source/context associations. Evaluate each matching repository context and the repository-less tenant context independently.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Authorize and check kill switches</strong>Apply actor, tenant, context, and harness policy before selection.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Evaluate registered harness triggers</strong>Reuse CEL selection and emit every authorized match.</div><div class="outcome">Output: selected runs, or an observable no-match/denied outcome. Read failures remain errors.</div></article>
+</div>
+<h3>Layer 4 — Dispatch and credentials: How does a selected run become an authorized workload?</h3>
+<div class="flow-grid">
+<article class="flow-card gh"><h4>GitHub Actions</h4><div class="flow-step"><strong>Workflow dispatch</strong>Shared dispatcher chooses the workflow/matrix dispatch mechanism.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Mint scoped token</strong>Workload presents OIDC assertion; central mint returns a scoped installation token.</div><div class="outcome">Output: authorized agent workflow with source access.</div></article>
+<article class="flow-card gl"><h4>GitLab CI</h4><div class="flow-step"><strong>Poller API call</strong>Requests the selected agent pipeline.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Validate dispatch boundary</strong>HMAC and source/user checks protect the current dispatcher-to-agent handoff.</div><div class="outcome">Output: API-triggered agent pipeline.</div></article>
+<article class="flow-card k8s"><h4><svg class="kube-wheel" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 9.4V4.8M14.25 10.7l4-2.3M14.25 13.3l4 2.3M12 14.6v4.6M9.75 13.3l-4 2.3M9.75 10.7l-4-2.3"/><circle cx="12" cy="3.2" r="1.5" fill="currentColor"/><circle cx="20.1" cy="7.2" r="1.5" fill="currentColor"/><circle cx="20.1" cy="16.8" r="1.5" fill="currentColor"/><circle cx="12" cy="20.8" r="1.5" fill="currentColor"/><circle cx="3.9" cy="16.8" r="1.5" fill="currentColor"/><circle cx="3.9" cy="7.2" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/></svg>Centralized Kubernetes <span class="tag">Proposed</span></h4><div class="flow-step"><strong>Admit selected run</strong>Fullsend applies the chosen concurrency policy and establishes recoverable run identity.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Resolve trusted Job specification</strong>Service configuration supplies approved image, placement, configuration references, and permitted workload identity.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Create or recover Job</strong>Scoped launcher authority creates the Job or validates the existing Job for this run.</div><div class="side-input"><strong>Credential split:</strong> launcher-to-Kubernetes authority is separate from run-to-source/inference credentials.</div><div class="outcome">Output: correlated Job identity and recoverable admission outcome.</div></article>
+</div>
+<h3>Layer 5 — Execution: How does the admitted workload perform and finish?</h3>
+<div class="flow-grid">
+<article class="flow-card gh"><h4>GitHub Actions</h4><div class="flow-step"><strong>Hosted runner</strong>Invokes <code>fullsend run</code> on the configured runner image.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Sandbox and result</strong>Podman sandbox runs the agent; workflow reports status and outputs.</div><div class="outcome">Output: workflow result, logs, and configured artifacts.</div></article>
+<article class="flow-card gl"><h4>GitLab CI</h4><div class="flow-step"><strong>Self-hosted runner</strong>Agent pipeline runs the Fullsend CLI in its configured container.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Sandbox and result</strong>Podman sandbox runs the agent; pipeline reports status and outputs.</div><div class="outcome">Output: pipeline result and configured artifacts.</div></article>
+<article class="flow-card k8s"><h4><svg class="kube-wheel" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 9.4V4.8M14.25 10.7l4-2.3M14.25 13.3l4 2.3M12 14.6v4.6M9.75 13.3l-4 2.3M9.75 10.7l-4-2.3"/><circle cx="12" cy="3.2" r="1.5" fill="currentColor"/><circle cx="20.1" cy="7.2" r="1.5" fill="currentColor"/><circle cx="20.1" cy="16.8" r="1.5" fill="currentColor"/><circle cx="12" cy="20.8" r="1.5" fill="currentColor"/><circle cx="3.9" cy="16.8" r="1.5" fill="currentColor"/><circle cx="3.9" cy="7.2" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/></svg>Centralized Kubernetes <span class="tag">Proposed</span></h4><div class="flow-step"><strong>Job Pod invokes <code>fullsend run</code></strong>The restricted Job is separate from the remote sandbox.</div><div class="step-arrow">↓ gateway transfer</div><div class="flow-step"><strong>Remote gateway operates sandbox</strong>OpenShell gateway manages the sandbox and its workspace PVC; the run Job does not mount that PVC.</div><div class="step-arrow">↓</div><div class="flow-step"><strong>Return results and clean up</strong>Transfer results, remove sandbox resources, and record success, failure, or cancellation.</div><div class="side-input"><strong>Placement inset:</strong> AISDLC-230 specifies private dev/prod ROSA HCP clusters and separate service/agent pools. These are backlog constraints, not universal Kubernetes requirements.</div><div class="outcome">Output: application result correlated with Job/Pod status and explicit destination.</div></article>
+</div>
+<p class="small">Follow-up observations re-enter candidate handling. Whether they queue, coalesce, steer a running agent, or cancel and replace it remains open. Kubernetes Job reconciliation does not choose that policy.</p>
+<div class="glossary"><strong>Terms used below</strong><ul><li><strong>Candidate reference:</strong> source, entity, and stable provider observation identity; no credentials or full source payload.</li><li><strong>Normalized evaluation input:</strong> current entity/activity and actor evidence prepared for selection.</li><li><strong>Selected run:</strong> one authorized agent/context choice with target and output destination.</li><li><strong>Job / Pod:</strong> Kubernetes workload object and its execution instance. A replacement Pod can repeat program execution.</li><li><strong>Sandbox:</strong> isolated remote OpenShell workspace, distinct from the Job Pod.</li><li><strong>Result:</strong> application outcome and configured output, retained independently of workload cleanup as required.</li></ul></div>
+<h3>Two-phase deployment view</h3>
+<div class="phase-grid">
+<div class="phase pilot"><h3>Pilot: direct handoff, one service instance</h3><p><strong>Source poller → candidate handoff → one dispatcher (normalize, select, admit) → launcher/API → run Job → remote sandbox gateway.</strong></p><p>Filesystem manifest/configuration feeds source selection, authorization, and workload policy. Direct handoff is a logical contract; it does not require a new public API or a network hop. The pilot requires one poller and one dispatcher, one selected source, direct handoff, and no mandatory database or broker. The unresolved persistence and acknowledgement mechanism must still make accepted responsibility recoverable.</p><p class="small">Webhook ingestion and active-active scaling are separate extensions after the candidate and run contracts are stable.</p></div>
+<div class="phase active"><h3>Active-active: shared responsibility, same selection core</h3><p><strong>Poller replicas and optional webhook receiver → shared durable inbox → dispatcher replicas → recoverable run records/idempotent launcher → Jobs.</strong></p><p>Checkpoint coordination and optional source-query leases sit beside producers. Selection, authorization, and launch policy remain the same. Inbox, run records, and leases are logical responsibilities, not a commitment to three products or any storage technology. An inbox delivery and a Kubernetes create are not one atomic transaction.</p><p class="small">The shared coordination layer must recover claims, partial fan-out, ambiguous creates, retries, backlog progress, and selected-run history.</p></div>
+</div>
+</section>
+<section id="worked-example">
+<h2>Worked example: Jira observation to two runs</h2>
+<p><span class="tag">Illustrative</span> Jira is the worked example, not a pilot-source decision. Context and harness names below are hypothetical, and field names are not a proposed public schema.</p>
+<p>Tenant <code>example-team</code> registers a Jira source and two applicable contexts: repository-less <code>planning</code> and repository-bound <code>service-a</code>. A third repository context, <code>service-b</code>, is not associated with this source and is excluded. Configuration revision <code>R7</code> supplies the associations and harness triggers.</p>
+<h3>Candidate reference and refreshed input</h3>
+<pre class="example-record">Illustrative candidate reference
+ tenant: example-team
+ source: jira-prod
+ entity: PROJ-42
+ activity: 100042
 
-  <nav class="toc">
-    <div class="toc-title">Contents</div>
-    <ol>
-      <li><a href="#summary">Summary</a></li>
-      <li><a href="#architecture">Architecture Flows</a></li>
-      <li><a href="#components">Component Comparison</a></li>
-      <li><a href="#security">Security Model</a></li>
-      <li><a href="#events">Event Coverage &amp; Latency</a></li>
-      <li><a href="#credentials">Credential Model</a></li>
-      <li><a href="#adr-evolution">ADR Evolution</a></li>
-      <li><a href="#ship-gates">Ship-Gating Risks</a></li>
-    </ol>
-  </nav>
-
-  <main>
-
-    <!-- ===== SUMMARY ===== -->
-    <div class="section" id="summary">
-      <h2>Summary</h2>
-      <p>
-        Fullsend dispatches AI agents in response to forge events (issues, PRs/MRs, comments, labels).
-        The two supported platforms &mdash; GitHub and GitLab &mdash; use fundamentally different
-        dispatch architectures shaped by each platform's capabilities and constraints.
-      </p>
-      <p>
-        <strong>GitHub</strong> uses a hybrid of webhooks and cron schedules. The primary dispatch path
-        is webhook-driven with sub-second latency: events flow through a <code>workflow_call</code>
-        shim into a centralized dispatcher that normalizes events into a forge-neutral
-        <code>NormalizedEvent</code>, mints ephemeral tokens via OIDC, and launches agent workflows.
-        Alongside this, cron schedules drive the prioritize scheduler (issue scoring) and scribe
-        (meeting notes &rarr; issue backlog). A planned steerwatch
-        (ADRs <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">0106</a>/<a href="https://github.com/fullsend-ai/fullsend/pull/6959">0113</a>/<a href="https://github.com/fullsend-ai/fullsend/pull/7451">0119</a>) will poll for follow-up events and absorb them mid-run,
-        replacing the current cancel-and-re-dispatch behavior &mdash; all implementation PRs are still open.
-        Platform-provided event integrity eliminates the need for cryptographic signing.
-      </p>
-      <p>
-        <strong>GitLab (current)</strong> is polling-driven with 5&ndash;15 minute latency for most events.
-        Two cron schedules discover events, a hardcoded Go router selects stages, and API-triggered
-        pipelines dispatch agent runs. HMAC-SHA256 signing protects the dispatcher&rarr;agent boundary
-        because pipeline variables are user-overridable.
-      </p>
-      <p>
-        <strong>GitLab (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>, accepted and partially implemented)</strong> adds a webhook fast-path
-        that triggers a native GitLab pipeline via a project trigger token. The poller becomes a backstop
-        for missed deliveries. Foundation work has shipped (trigger-token CRUD, CAS dedup, override-role primitives);
-        remaining work includes the dispatcher scaffold, event builder, CLI wiring, and provisioning.
-      </p>
-      <p>
-        <strong>Convergence:</strong> Both platforms are moving toward entity-first evaluation
-        (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a>), where agents reconcile current entity state rather than trusting only the
-        triggering event. On GitHub this will be paired with the steerwatch (planned in-run absorption of
-        follow-up events); on GitLab the same entity reconciliation feeds the CEL dispatch core.
-        Event normalization into a forge-neutral <code>NormalizedEvent</code> is shared across
-        both platforms via <code>harnessdispatch</code>.
-      </p>
-    </div>
-
-    <!-- ===== ARCHITECTURE FLOWS ===== -->
-    <div class="section" id="architecture">
-      <h2>Architecture Flows</h2>
-      <p>
-        Side-by-side view organized by layer. Each layer maps across platforms so
-        differences are visible at a glance. Both platforms have two routing paths:
-        a legacy hardcoded path (first-party agents only) and the CEL-based path
-        (first-party + custom agents).
-      </p>
-
-      <div class="legend">
-        <div class="legend-item"><div class="legend-swatch current"></div> Implemented</div>
-        <div class="legend-item"><div class="legend-swatch planned"></div> Planned (ADR accepted)</div>
-        <div class="legend-item"><div class="legend-swatch open-risk"></div> Open risk</div>
-        <div class="legend-item"><div class="legend-swatch shared"></div> Shared / cross-platform</div>
-      </div>
-
-      <!-- LAYER 1: ENTRY POINTS -->
-      <h3>Layer 1: Entry Points</h3>
-      <div class="arch-grid">
-        <div class="arch-col gh">
-          <h4>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            GitHub
-          </h4>
-          <div class="arch-group">
-            <div class="arch-group-label">Webhook (primary &mdash; sub-second)</div>
-            <div class="arch-node current">
-              <span class="node-label">GitHub App Webhook Events</span>
-              <span class="node-detail">issues (opened, edited, labeled), issue_comment (created),<br>pull_request_target (opened, synchronize, ready_for_review, closed, labeled),<br>pull_request_review (submitted)</span>
-            </div>
-          </div>
-          <div class="arch-group" style="margin-top:0.5rem">
-            <div class="arch-group-label">Cron schedules</div>
-            <div class="arch-parallel">
-              <div class="arch-node current" style="font-size:0.75rem">
-                <span class="node-label">Prioritize Scheduler</span>
-                <span class="node-detail">*/10 * * * * &mdash; scans Projects V2 for unscored issues</span>
-              </div>
-              <div class="arch-node current" style="font-size:0.75rem">
-                <span class="node-label">Scribe</span>
-                <span class="node-detail">0 14 * * 1-4 &mdash; meeting notes &rarr; issue backlog<br>Dedicated GitHub App, Drive API</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="arch-col gl">
-          <h4>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M15.97 9.058l-.895-2.756L13.3.842a.312.312 0 00-.592 0L10.93 6.302H5.07L3.292.842a.312.312 0 00-.592 0L.925 6.302.03 9.058a.624.624 0 00.227.698L8 15.178l7.743-5.422a.624.624 0 00.227-.698"/></svg>
-            GitLab
-          </h4>
-          <div class="arch-group">
-            <div class="arch-group-label">Webhook (planned &mdash; <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</div>
-            <div class="arch-node planned">
-              <span class="node-label">Project Webhook &rarr; Trigger Token</span>
-              <span class="node-detail">Native pipeline on protected default branch<br>Payload treated as untrusted hint</span>
-            </div>
-          </div>
-          <div class="arch-group" style="margin-top:0.5rem">
-            <div class="arch-group-label">Cron schedules (current primary path)</div>
-            <div class="arch-parallel">
-              <div class="arch-node current" style="font-size:0.75rem">
-                <span class="node-label">Poller: Slash</span>
-                <span class="node-detail">*/5 &mdash; fast /fs-* note discovery</span>
-              </div>
-              <div class="arch-node current" style="font-size:0.75rem">
-                <span class="node-label">Poller: Events</span>
-                <span class="node-detail">:02,:17,:32,:47 &mdash; issues, labels, merges, MR notes</span>
-              </div>
-            </div>
-          </div>
-          <div class="arch-group" style="margin-top:0.5rem">
-            <div class="arch-group-label">Native CI event</div>
-            <div class="arch-node current" style="font-size:0.75rem">
-              <span class="node-label">MR Dispatch Pipeline</span>
-              <span class="node-detail">merge_request_event &mdash; sub-second for MR open/sync/close</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- LAYER 2: SHIM + NORMALIZATION -->
-      <h3>Layer 2: Shim &amp; Normalization</h3>
-      <div class="arch-grid">
-        <div class="arch-col gh">
-          <h4>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            GitHub
-          </h4>
-          <div class="arch-node current">
-            <span class="node-label">Shim Workflow (per-repo)</span>
-            <span class="node-detail">fullsend.yml in enrolled repo<br>Filters bots, scaffold PRs, non-ready labels<br><code>workflow_call</code> &rarr; <code>fullsend-ai/fullsend/reusable-dispatch.yml</code></span>
-          </div>
-          <div class="arch-connector">&darr;</div>
-          <div class="arch-node current">
-            <span class="node-label">Event Normalization</span>
-            <span class="node-detail"><code>gha-event</code> input driver &rarr; <code>normevent.Event</code> (typed enums)<br>Maps webhook payload to forge-neutral schema</span>
-          </div>
-        </div>
-        <div class="arch-col gl">
-          <h4>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M15.97 9.058l-.895-2.756L13.3.842a.312.312 0 00-.592 0L10.93 6.302H5.07L3.292.842a.312.312 0 00-.592 0L.925 6.302.03 9.058a.624.624 0 00.227.698L8 15.178l7.743-5.422a.624.624 0 00.227-.698"/></svg>
-            GitLab
-          </h4>
-          <div class="arch-node current">
-            <span class="node-label">No shim &mdash; CI templates included directly</span>
-            <span class="node-detail"><code>include: local:</code> from <code>.gitlab/ci/</code> in enrolled repo<br>Templates scaffolded during setup</span>
-          </div>
-          <div class="arch-connector">&darr;</div>
-          <div class="arch-node current">
-            <span class="node-label">Event Normalization</span>
-            <span class="node-detail">Poller: Go <code>toNormalizedEvent()</code> + API enrichment (actor, role, labels)<br>MR dispatch: shell <code>jq</code> + <code>CI_JOB_TOKEN</code> API queries<br>Current: <code>dispatch.NormalizedEvent</code> (strings) | Desired: <code>normevent.Event</code> (enums)</span>
-          </div>
-          <div class="arch-connector">&darr;</div>
-          <div class="arch-group">
-            <div class="arch-group-label">Webhook trust boundary (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</div>
-            <div class="arch-node planned" style="font-size:0.75rem">
-              <span class="node-label">API Re-fetch + Validation</span>
-              <span class="node-detail">Re-fetch entity state via API; validate action-vs-state consistency</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- LAYER 3: ROUTING -->
-      <h3>Layer 3: Routing</h3>
-      <p style="font-size:0.875rem; color:var(--text-sec); margin-bottom:0.75rem">
-        Both platforms run two routing paths in parallel. The legacy path handles only
-        first-party agents; the CEL path handles all agents including custom ones.
-        Custom agents <strong>cannot</strong> be dispatched through the legacy path.
-      </p>
-      <div class="arch-grid">
-        <div class="arch-col gh">
-          <h4>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            GitHub
-          </h4>
-          <div class="arch-node current">
-            <span class="node-label">Shell Routing (legacy, first-party only)</span>
-            <span class="node-detail">Case statements on raw <code>github.event.*</code><br>6 hardcoded stages: triage, code, fix, review, retro, prioritize<br>Custom agents: <strong>not routed</strong></span>
-          </div>
-          <div class="arch-node current" style="margin-top:0.375rem">
-            <span class="node-label">CEL Harness Eval (all agents)</span>
-            <span class="node-detail"><code>fullsend dispatch --input-driver gha-event --output-driver gha-matrix</code><br>Evaluates CEL <code>trigger:</code> on each registered harness<br>Custom agents: <strong>routed via CEL triggers</strong> (<a href="https://fullsend.sh/docs/ADRs/0061-harness-cel-dispatch">ADR 0061</a>)</span>
-          </div>
-          <div class="arch-connector">&darr; auth: collaborator permission API (<a href="https://fullsend.sh/docs/ADRs/0054-require-authorization-on-all-agent-dispatch-paths">ADR 0054</a>)</div>
-        </div>
-        <div class="arch-col gl">
-          <h4>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M15.97 9.058l-.895-2.756L13.3.842a.312.312 0 00-.592 0L10.93 6.302H5.07L3.292.842a.312.312 0 00-.592 0L.925 6.302.03 9.058a.624.624 0 00.227.698L8 15.178l7.743-5.422a.624.624 0 00.227-.698"/></svg>
-            GitLab
-          </h4>
-          <div class="arch-node current">
-            <span class="node-label">HarnessRouter (legacy, first-party + slash)</span>
-            <span class="node-detail">Hardcoded Go routing for labels, merges, comments<br>/fs-&lt;name&gt; slash commands: routes to <strong>any registered agent</strong><br>Label/merge routing: first-party only</span>
-          </div>
-          <div class="arch-node planned" style="margin-top:0.375rem">
-            <span class="node-label">CEL Harness Eval (desired, all agents)</span>
-            <span class="node-detail">Engine exists (<code>harnessdispatch</code>), used by Jira poll path<br><strong>Not yet wired to GitLab poller</strong> (<a href="https://github.com/fullsend-ai/fullsend/issues/2896">#2896</a>&ndash;#2901)<br>Custom agents: routed via CEL triggers</span>
-          </div>
-          <div class="arch-connector">&darr; auth: Members API (Developer &ge; 30, <a href="https://fullsend.sh/docs/ADRs/0054-require-authorization-on-all-agent-dispatch-paths">ADR 0054</a>)</div>
-          <div class="arch-group">
-            <div class="arch-group-label">Dedup + state persistence</div>
-            <div class="arch-node current" style="font-size:0.75rem">
-              <span class="node-label">HMAC-signed git branches</span>
-              <span class="node-detail">Branches: <code>fullsend-poll-state-slash</code>, <code>fullsend-poll-state-events</code><br>Watermarks, dispatched keys, failed keys, label state<br>CAS persist shipped (<a href="https://github.com/fullsend-ai/fullsend/pull/7812">PR #7812</a>)</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- LAYER 4: DISPATCH + CREDENTIALS -->
-      <h3>Layer 4: Dispatch &amp; Credentials</h3>
-      <div class="arch-grid">
-        <div class="arch-col gh">
-          <h4>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            GitHub
-          </h4>
-          <div class="arch-node current">
-            <span class="node-label">OIDC &rarr; Token Mint</span>
-            <span class="node-detail">GHA OIDC JWT &rarr; mint verifies signature + <code>job_workflow_ref</code><br>&rarr; scoped GitHub App installation token (ephemeral, per-request)</span>
-          </div>
-          <div class="arch-connector">&darr; dispatch integrity: platform-guaranteed (<code>workflow_call</code>)</div>
-          <div class="arch-node current">
-            <span class="node-label">Agent Job</span>
-            <span class="node-detail">Shell path: per-stage reusable workflow (<code>gh workflow run</code>)<br>CEL path: inline <code>harness-run</code> job via GHA matrix</span>
-          </div>
-        </div>
-        <div class="arch-col gl">
-          <h4>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M15.97 9.058l-.895-2.756L13.3.842a.312.312 0 00-.592 0L10.93 6.302H5.07L3.292.842a.312.312 0 00-.592 0L.925 6.302.03 9.058a.624.624 0 00.227.698L8 15.178l7.743-5.422a.624.624 0 00.227-.698"/></svg>
-            GitLab
-          </h4>
-          <div class="arch-node current">
-            <span class="node-label">Bot PAT (protected CI/CD variable)</span>
-            <span class="node-detail">Maintainer-role project access token, <code>api</code> scope<br>Long-lived, broad &mdash; no mint service for GitLab</span>
-          </div>
-          <div class="arch-connector">&darr; dispatch integrity: HMAC-SHA256 over 11 variables + source/user checks</div>
-          <div class="arch-node current">
-            <span class="node-label">Agent Template</span>
-            <span class="node-detail"><code>fullsend-agent.yml</code> (generic, parameterized by <code>$STAGE</code>)<br>Verifies: pipeline.source, user.id, HMAC, kill switch, role, authz</span>
-          </div>
-          <div class="arch-group" style="margin-top:0.5rem">
-            <div class="arch-group-label">Identity hardening (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</div>
-            <div class="arch-node planned" style="font-size:0.75rem">
-              <span class="node-label">CI_JOB_TOKEN Pinning</span>
-              <span class="node-detail">Replace overridable <code>CI_PROJECT_ID</code> with unforgeable job token record</span>
-            </div>
-            <div class="arch-node open-risk" style="font-size:0.75rem; margin-top:0.375rem">
-              <span class="node-label">API Base-URL Pinning</span>
-              <span class="node-detail">No unforgeable pin for <code>CI_API_V4_URL</code> &mdash; ship-gating risk</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- LAYER 5: AGENT EXECUTION -->
-      <h3>Layer 5: Agent Execution &amp; In-Run Behavior</h3>
-      <div class="arch-grid">
-        <div class="arch-col gh">
-          <h4>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            GitHub
-          </h4>
-          <div class="arch-node shared">
-            <span class="node-label">fullsend run &lt;stage&gt;</span>
-            <span class="node-detail">Runner: GHA-hosted <code>ubuntu-24.04</code> (bare VM, overridable via <code>runner_image</code>)<br>Entity-first harness eval (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a>): entity (required) + event (nullable)<br>Harness resolution &rarr; Podman sandbox on runner host<br>GCP WIF for inference (OIDC, 5-min token, refresh loop)</span>
-          </div>
-          <div class="arch-group" style="margin-top:0.5rem">
-            <div class="arch-group-label">In-run steering (ADRs <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">0106</a> / <a href="https://github.com/fullsend-ai/fullsend/pull/6959">0113</a> / <a href="https://github.com/fullsend-ai/fullsend/pull/7451">0119</a>)</div>
-            <div class="arch-node planned">
-              <span class="node-label">Steerwatch (not yet implemented)</span>
-              <span class="node-detail">Will poll platform run records during execution<br>Detects follow-up events &rarr; absorbs mid-run<br>Requires: <code>cancel-in-progress: false</code> (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">ADR 0106</a>, <a href="https://github.com/fullsend-ai/fullsend/pull/7007">PR #7007</a> open)<br>Current: <code>cancel-in-progress: true</code> (agents still cancelled in-flight)</span>
-            </div>
-            <div class="arch-parallel" style="margin-top:0.375rem">
-              <div class="arch-node planned" style="font-size:0.75rem">
-                <span class="node-label">Steer Receipt</span>
-                <span class="node-detail"><a href="https://github.com/fullsend-ai/fullsend/pull/7456">PR #7456</a> &mdash; receipt + skip queued run</span>
-              </div>
-              <div class="arch-node planned" style="font-size:0.75rem">
-                <span class="node-label">Steer Default-On</span>
-                <span class="node-detail"><a href="https://github.com/fullsend-ai/fullsend/pull/7461">PR #7461</a> &mdash; opt-out with <code>steer.enabled: false</code></span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="arch-col gl">
-          <h4>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M15.97 9.058l-.895-2.756L13.3.842a.312.312 0 00-.592 0L10.93 6.302H5.07L3.292.842a.312.312 0 00-.592 0L.925 6.302.03 9.058a.624.624 0 00.227.698L8 15.178l7.743-5.422a.624.624 0 00.227-.698"/></svg>
-            GitLab
-          </h4>
-          <div class="arch-node shared">
-            <span class="node-label">fullsend run &lt;stage&gt;</span>
-            <span class="node-detail">Runner: self-hosted, tag-selected &mdash; jobs run inside <code>fullsend-runner:dev</code> Docker image<br>Current: event-only harness eval<br>Desired: entity-first (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a>) &mdash; entity + event<br>Harness resolution &rarr; Podman sandbox inside Docker (DinD-like)<br>GCP WIF for inference (OIDC <code>id_tokens</code>, job-duration)</span>
-          </div>
-          <div class="arch-group" style="margin-top:0.5rem">
-            <div class="arch-group-label">In-run behavior</div>
-            <div class="arch-node current" style="font-size:0.75rem">
-              <span class="node-label">No in-run steering</span>
-              <span class="node-detail">Each poll cycle dispatches independent runs<br>Concurrency: resource groups &mdash; slash: <code>newest_first</code> (latest command wins), events: <code>oldest_first</code> (FIFO)<br>No steerwatch equivalent planned (resource groups handle serialization)</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ===== COMPONENT COMPARISON ===== -->
-    <div class="section" id="components">
-      <h2>Component Comparison</h2>
-      <p>
-        Every architectural element mapped across platforms. The "GitLab Desired" column
-        reflects ADRs 0061, 0098, 0106, and 0125.
-      </p>
-
-      <table>
-        <thead>
-          <tr>
-            <th style="width:16%">Component</th>
-            <th style="width:28%">GitHub</th>
-            <th style="width:28%">GitLab (Current)</th>
-            <th style="width:28%">GitLab (Desired)</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong>Webhook events</strong></td>
-            <td>GitHub App webhooks (sub-second)</td>
-            <td>None (poller-only)</td>
-            <td>Project webhook via trigger token (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</td>
-          </tr>
-          <tr>
-            <td><strong>Cron schedules</strong></td>
-            <td>Prioritize (*/10), Scribe (Mon&ndash;Thu 14:00 UTC, dedicated App)</td>
-            <td>Slash poller (*/5), Events poller (:02,:17,:32,:47)</td>
-            <td>Same pollers as backstop</td>
-          </tr>
-          <tr>
-            <td><strong>Native CI events</strong></td>
-            <td>&mdash;</td>
-            <td><code>merge_request_event</code> pipeline (sub-second)</td>
-            <td>Same</td>
-          </tr>
-          <tr>
-            <td><strong>Dispatch trigger</strong></td>
-            <td><code>workflow_call</code> to upstream <code>reusable-dispatch.yml</code> (per-repo mode)</td>
-            <td><code>POST /projects/:id/pipeline</code> (API, bot PAT)</td>
-            <td>Same API call from poller; trigger token from webhook</td>
-          </tr>
-          <tr>
-            <td><strong>Event normalization</strong></td>
-            <td><code>gha-event</code> input driver &rarr; <code>normevent.Event</code> (typed enums). Legacy shell path also consumes raw <code>github.event.*</code> in parallel.</td>
-            <td>Go <code>toNormalizedEvent()</code> &rarr; <code>dispatch.NormalizedEvent</code> (plain strings) + API enrichment</td>
-            <td>Unified via <code>normevent.Event</code> (typed enums)</td>
-          </tr>
-          <tr>
-            <td><strong>Routing (first-party)</strong></td>
-            <td>Shell case statements (legacy) + CEL harness eval (parallel)</td>
-            <td>Hardcoded Go <code>HarnessRouter</code> (labels, merges, comments, slash)</td>
-            <td>CEL trigger expressions via <code>harnessdispatch</code> (<a href="https://fullsend.sh/docs/ADRs/0061-harness-cel-dispatch">ADR 0061</a>)</td>
-          </tr>
-          <tr>
-            <td><strong>Routing (custom)</strong></td>
-            <td>CEL path only &mdash; shell routing cannot dispatch custom agents. Per-repo install required.</td>
-            <td>Slash commands (<code>/fs-&lt;name&gt;</code>) only &mdash; label/merge routing is first-party hardcoded</td>
-            <td>CEL path handles all agents uniformly</td>
-          </tr>
-          <tr>
-            <td><strong>Deduplication</strong></td>
-            <td>GHA concurrency groups (currently <code>cancel-in-progress: true</code>; <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">ADR 0106</a> accepted but <a href="https://github.com/fullsend-ai/fullsend/pull/7007">PR #7007</a> not yet merged)</td>
-            <td>CI variable-based dispatched keys (last-writer-wins) + entity-level per-cycle</td>
-            <td>CAS poll-state persist shipped (<a href="https://github.com/fullsend-ai/fullsend/pull/7812">PR #7812</a>, <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</td>
-          </tr>
-          <tr>
-            <td><strong>Concurrency control</strong></td>
-            <td>GHA concurrency per stage &times; entity</td>
-            <td>GL resource groups: <code>fullsend-{STAGE}-{RESOURCE_KEY}</code><br>Slash: <code>newest_first</code>; Events: <code>oldest_first</code></td>
-            <td>Same resource groups</td>
-          </tr>
-          <tr>
-            <td><strong>State storage</strong></td>
-            <td>Stateless for webhook path; cron paths (prioritize, scribe) manage their own state</td>
-            <td>HMAC-signed git branches (<code>fullsend-poll-state-slash</code>, <code>fullsend-poll-state-events</code>); CAS persist (<a href="https://github.com/fullsend-ai/fullsend/pull/7812">PR #7812</a>)</td>
-            <td>Same (already migrated from CI/CD variables)</td>
-          </tr>
-          <tr>
-            <td><strong>Dispatch integrity</strong></td>
-            <td>Platform-guaranteed (<code>workflow_call</code>)</td>
-            <td>HMAC-SHA256 over 11 dispatch variables</td>
-            <td>Same HMAC, extended to webhook dispatcher</td>
-          </tr>
-          <tr>
-            <td><strong>Agent credentials</strong></td>
-            <td>OIDC &rarr; mint &rarr; ephemeral scoped token</td>
-            <td>Stored bot PAT (protected CI/CD variable)</td>
-            <td>Same PAT (no mint for GitLab)</td>
-          </tr>
-          <tr>
-            <td><strong>Inference credentials</strong></td>
-            <td>OIDC &rarr; GCP WIF (5-min token, refresh loop)</td>
-            <td>OIDC <code>id_tokens</code> &rarr; GCP WIF (job-duration)</td>
-            <td>Same</td>
-          </tr>
-          <tr>
-            <td><strong>Runner / executor</strong></td>
-            <td>GitHub-hosted runner (<code>ubuntu-24.04</code> default, overridable via <code>runner_image</code> input). Bare VM &mdash; no container wrapping the job.</td>
-            <td>Self-hosted runner, tag-selected (<code>--runner-tags</code> at install). Jobs run inside <code>fullsend-runner:dev</code> Docker image (Go, git, jq, python3).</td>
-            <td>Same</td>
-          </tr>
-          <tr>
-            <td><strong>CLI install</strong></td>
-            <td>GitHub Action (<code>install-fullsend-cli</code>)</td>
-            <td><code>before_script</code>: download from GitHub Releases (SHA256-verified) or build from source</td>
-            <td>Same</td>
-          </tr>
-          <tr>
-            <td><strong>Agent sandbox</strong></td>
-            <td>Podman on runner host</td>
-            <td>Podman inside Docker image (DinD-like)</td>
-            <td>Same</td>
-          </tr>
-          <tr>
-            <td><strong>CI template</strong></td>
-            <td>Per-stage reusable workflows in <code>fullsend-ai/fullsend</code> (per-repo mode; per-org deprecated)</td>
-            <td>Single <code>fullsend-agent.yml</code> (parameterized by <code>$STAGE</code>)</td>
-            <td>Same + dedicated webhook dispatcher include</td>
-          </tr>
-          <tr>
-            <td><strong>Harness evaluation</strong></td>
-            <td>Entity-first: <code>entity</code> (required) + <code>event</code> (nullable) per <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a></td>
-            <td>Event-only (Go router, no entity context)</td>
-            <td>Entity-first (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a>)</td>
-          </tr>
-          <tr>
-            <td><strong>Mid-run steering</strong></td>
-            <td>Steerwatch (ADRs <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">0106</a>/<a href="https://github.com/fullsend-ai/fullsend/pull/6959">0113</a>/<a href="https://github.com/fullsend-ai/fullsend/pull/7451">0119</a>): <strong>not yet implemented</strong>. All PRs open (<a href="https://github.com/fullsend-ai/fullsend/pull/7007">#7007</a>, <a href="https://github.com/fullsend-ai/fullsend/pull/6959">#6959</a>, <a href="https://github.com/fullsend-ai/fullsend/pull/7447">#7447</a>&ndash;<a href="https://github.com/fullsend-ai/fullsend/pull/7461">#7461</a>). Agents are still cancelled in-flight.</td>
-            <td>None &mdash; each poll cycle dispatches independent runs</td>
-            <td>Not planned (GitLab resource groups handle serialization)</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- ===== SECURITY MODEL ===== -->
-    <div class="section" id="security">
-      <h2>Security Model</h2>
-      <p>
-        The platforms face different threat models because of how they expose pipeline execution.
-        GitHub's <code>workflow_call</code> provides structural guarantees; GitLab requires
-        cryptographic and procedural mitigations.
-      </p>
-
-      <table>
-        <thead>
-          <tr>
-            <th style="width:20%">Boundary</th>
-            <th style="width:40%">GitHub</th>
-            <th style="width:40%">GitLab</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong>Event &rarr; dispatcher</strong></td>
-            <td>Platform-provided <code>github.event.*</code> context; unforgeable</td>
-            <td>Poller: reads API directly (trusted).<br>Webhook: payload is untrusted hint; re-fetched via API (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</td>
-          </tr>
-          <tr>
-            <td><strong>Dispatcher &rarr; agent</strong></td>
-            <td><code>workflow_call</code> guarantees the calling workflow's identity and variables</td>
-            <td>HMAC-SHA256 over dispatch variables + <code>pipeline.source == "api"</code> + <code>pipeline.user.id</code> == bot</td>
-          </tr>
-          <tr>
-            <td><strong>Agent &rarr; forge</strong></td>
-            <td>Ephemeral scoped token from mint (short-lived, narrow permissions)</td>
-            <td>Stored bot PAT with <code>api</code> scope (broad, long-lived)</td>
-          </tr>
-          <tr>
-            <td><strong>Agent &rarr; inference</strong></td>
-            <td>OIDC &rarr; GCP WIF (standard)</td>
-            <td>OIDC <code>id_tokens</code> &rarr; GCP WIF (standard)</td>
-          </tr>
-          <tr>
-            <td><strong>Identity pinning</strong></td>
-            <td>OIDC <code>job_workflow_ref</code> claim (unforgeable)</td>
-            <td>Current: <code>CI_PROJECT_ID</code> (overridable!)<br>Desired: <code>CI_JOB_TOKEN</code> job record (unforgeable)</td>
-          </tr>
-          <tr>
-            <td><strong>Debug trace guard</strong></td>
-            <td>Not needed (no stored PAT to expose)</td>
-            <td>Deny-before-admit <code>CI_DEBUG_TRACE</code> guard (implemented &mdash; runs before any token-bearing operation)</td>
-          </tr>
-          <tr>
-            <td><strong>Fork protection</strong></td>
-            <td><code>pull_request_target</code> runs base branch code; fail-closed fork check</td>
-            <td>Fork MR detection via source/target project ID comparison; block code/fix on forks</td>
-          </tr>
-          <tr>
-            <td><strong>Authorization gate</strong></td>
-            <td>Collaborator permission API (<a href="https://fullsend.sh/docs/ADRs/0054-require-authorization-on-all-agent-dispatch-paths">ADR 0054</a>)</td>
-            <td>Members API &mdash; actor must have Developer access (&ge;30); read-only stages exempt</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <h3>Trigger-Token Threat Model (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>, GitLab only)</h3>
-      <p>
-        The webhook fast-path introduces a trigger token &mdash; a credential weaker than the bot PAT
-        that can start the privileged dispatcher pipeline. Mitigations:
-      </p>
-      <ul>
-        <li>Token possession = dispatcher execution capability (treat as sensitive)</li>
-        <li>All trigger-supplied variables validated against API re-fetches</li>
-        <li>HTTP clients ignore trigger-influenced proxy and CA settings</li>
-        <li>Webhook URLs and tokens never logged</li>
-        <li>Rotation and redaction procedures required</li>
-      </ul>
-    </div>
-
-    <!-- ===== EVENT COVERAGE & LATENCY ===== -->
-    <div class="section" id="events">
-      <h2>Event Coverage &amp; Latency</h2>
-      <p>
-        What forge events trigger agent work, and how fast each platform responds.
-      </p>
-
-      <table>
-        <thead>
-          <tr>
-            <th style="width:22%">Event</th>
-            <th style="width:13%">GitHub</th>
-            <th style="width:18%">GitLab (Current)</th>
-            <th style="width:18%">GitLab (Desired)</th>
-            <th style="width:14%">Stages</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Issue opened</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td class="latency-none">Not supported</td>
-            <td class="latency-fast">&lt;1s (webhook)</td>
-            <td>triage</td>
-          </tr>
-          <tr>
-            <td>Issue label added</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td class="latency-slow">~15 min</td>
-            <td class="latency-fast">&lt;1s + 15m backstop</td>
-            <td>code, review, triage</td>
-          </tr>
-          <tr>
-            <td>Issue comment (/fs-*)</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td class="latency-slow">~5 min</td>
-            <td class="latency-fast">&lt;1s + 5m backstop</td>
-            <td>per command</td>
-          </tr>
-          <tr>
-            <td>Issue comment (auto)</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td class="latency-slow">~15 min</td>
-            <td class="latency-fast">&lt;1s + 15m backstop</td>
-            <td>triage</td>
-          </tr>
-          <tr>
-            <td>PR/MR opened</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td>review</td>
-          </tr>
-          <tr>
-            <td>PR/MR synchronize</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td>review</td>
-          </tr>
-          <tr>
-            <td>PR/MR label added</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td class="latency-none">Not supported</td>
-            <td class="latency-fast">&lt;1s (webhook)</td>
-            <td>review</td>
-          </tr>
-          <tr>
-            <td>PR review (changes requested)</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td class="latency-slow">~15 min</td>
-            <td class="latency-fast">&lt;1s + 15m backstop</td>
-            <td>fix</td>
-          </tr>
-          <tr>
-            <td>PR/MR merged</td>
-            <td class="latency-fast">&lt;1s</td>
-            <td class="latency-slow">~15 min</td>
-            <td class="latency-fast">&lt;1s + 15m backstop</td>
-            <td>retro</td>
-          </tr>
-          <tr>
-            <td>Scheduled prioritize</td>
-            <td class="latency-fast">cron */10</td>
-            <td class="latency-none">Not implemented</td>
-            <td class="latency-none">Not planned</td>
-            <td>prioritize</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- ===== CREDENTIAL MODEL ===== -->
-    <div class="section" id="credentials">
-      <h2>Credential Model</h2>
-
-      <table>
-        <thead>
-          <tr>
-            <th style="width:22%">Aspect</th>
-            <th style="width:39%">GitHub</th>
-            <th style="width:39%">GitLab</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong>Primary credential</strong></td>
-            <td>GitHub App key &rarr; OIDC &rarr; mint &rarr; scoped installation token (ephemeral, per-request)</td>
-            <td>Bot PAT (Maintainer-role project access token, <code>api</code> scope, long-lived)</td>
-          </tr>
-          <tr>
-            <td><strong>Credential storage</strong></td>
-            <td>App private key in mint service (GCP Cloud Run)</td>
-            <td>Protected, masked CI/CD variable</td>
-          </tr>
-          <tr>
-            <td><strong>Credential scope</strong></td>
-            <td>Scoped per-request (repos, permissions)</td>
-            <td><code>api</code> scope (broad &mdash; narrower scopes unavailable in GitLab)</td>
-          </tr>
-          <tr>
-            <td><strong>Inference</strong></td>
-            <td>OIDC &rarr; GCP WIF (5-min token, refresh loop)</td>
-            <td>OIDC <code>id_tokens</code> &rarr; GCP WIF (job-duration token)</td>
-          </tr>
-          <tr>
-            <td><strong>Webhook credential</strong></td>
-            <td>GitHub App webhook secret (managed by GitHub)</td>
-            <td>Current: none. Desired: trigger token per project (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</td>
-          </tr>
-          <tr>
-            <td><strong>Credentials per project</strong></td>
-            <td>1 (App key shared across org)</td>
-            <td>Current: 1 (bot PAT). Desired: 2 (PAT + trigger token)</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- ===== ADR EVOLUTION ===== -->
-    <div class="section" id="adr-evolution">
-      <h2>ADR Evolution</h2>
-      <p>How the dispatch architecture evolved through architectural decisions.</p>
-
-      <div class="timeline">
-        <div class="timeline-entry superseded">
-          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0008-workflow-dispatch-for-cross-repo-dispatch">ADR 0008</a> &mdash; Superseded</div>
-          <div class="timeline-title"><code>workflow_dispatch</code> + PAT for cross-repo dispatch</div>
-          <div class="timeline-body">Original GitHub dispatch used a stored PAT. Replaced by the mint model.</div>
-        </div>
-        <div class="timeline-entry superseded">
-          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0028-gitlab-support">ADR 0028</a> &mdash; Deprecated</div>
-          <div class="timeline-title">GitLab support via webhook bridge</div>
-          <div class="timeline-body">Originally proposed an external translation bridge for GitLab webhooks. Superseded by cron-polling (<a href="https://fullsend.sh/docs/ADRs/0067-gitlab-cron-polling-event-dispatch">ADR 0067</a>). Credential model remains as reference.</div>
-        </div>
-        <div class="timeline-entry">
-          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0029-central-token-mint-secretless-fullsend">ADR 0029</a> &mdash; Current</div>
-          <div class="timeline-title">Central token mint + shared apps</div>
-          <div class="timeline-body">Moved GitHub App PEMs to a central mint service. Accepts OIDC JWTs, verifies <code>job_workflow_ref</code>, returns scoped tokens. Enabled <code>workflow_call</code>.</div>
-        </div>
-        <div class="timeline-entry">
-          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0041-synchronous-workflow-call-event-dispatch">ADR 0041</a> &mdash; Current</div>
-          <div class="timeline-title">Synchronous <code>workflow_call</code> dispatch</div>
-          <div class="timeline-body">Replaced async <code>workflow_dispatch</code> fan-out with synchronous <code>workflow_call</code> for better UI correlation. Partially superseded by CEL-based dispatch.</div>
-        </div>
-        <div class="timeline-entry">
-          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0054-require-authorization-on-all-agent-dispatch-paths">ADR 0054</a> &mdash; Current</div>
-          <div class="timeline-title">Authorization on all dispatch paths</div>
-          <div class="timeline-body">Requires write-level (or triage-level for observation) permission on all dispatch paths. Applies to both GitHub and GitLab.</div>
-        </div>
-        <div class="timeline-entry">
-          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0061-harness-cel-dispatch">ADR 0061</a> &mdash; Current</div>
-          <div class="timeline-title">Harness CEL triggers and dispatch drivers</div>
-          <div class="timeline-body">Harnesses declare CEL <code>trigger</code> expressions on a forge-neutral <code>NormalizedEvent</code>. Engine exists and works for GitHub + Jira; not yet wired to GitLab poller.</div>
-        </div>
-        <div class="timeline-entry">
-          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0063-polling-based-work-discovery">ADR 0063</a> &mdash; Current</div>
-          <div class="timeline-title">Polling-based work discovery</div>
-          <div class="timeline-body"><code>fullsend poll</code> reuses dispatch driver architecture. Poll input drivers discover changes, emit <code>NormalizedEvent</code>. First driver: Jira.</div>
-        </div>
-        <div class="timeline-entry">
-          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0067-gitlab-cron-polling-event-dispatch">ADR 0067</a> &mdash; Current</div>
-          <div class="timeline-title">GitLab cron-polling event dispatch</div>
-          <div class="timeline-body">Two-path model: native <code>merge_request_event</code> for MRs + cron-polling for everything else. Single bot PAT, dual schedules, HMAC signing.</div>
-        </div>
-        <div class="timeline-entry">
-          <div class="timeline-date"><a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a> &mdash; Current/Desired</div>
-          <div class="timeline-title">Entity-first harness evaluation</div>
-          <div class="timeline-body">CEL receives <code>entity</code> (required) + <code>event</code> (nullable). Polling discovers entity state without synthetic events. Partially supersedes event-only model.</div>
-        </div>
-        <div class="timeline-entry planned">
-          <div class="timeline-date"><a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">ADR 0106</a> &mdash; Accepted, not yet implemented (GitHub)</div>
-          <div class="timeline-title">Serialized agent runs and event coalescing</div>
-          <div class="timeline-body">ADR accepted (<a href="https://github.com/fullsend-ai/fullsend/pull/6909">PR #6909</a>, merged). Will change GitHub concurrency from <code>cancel-in-progress: true</code> to <code>false</code>. Implementation (<a href="https://github.com/fullsend-ai/fullsend/pull/7007">PR #7007</a>) is still <strong>open</strong>. Current codebase still cancels in-flight agents.</div>
-        </div>
-        <div class="timeline-entry planned">
-          <div class="timeline-date"><a href="https://github.com/fullsend-ai/fullsend/pull/6959">ADR 0113</a> &mdash; In-flight (GitHub)</div>
-          <div class="timeline-title">Steer running agents with mid-run updates</div>
-          <div class="timeline-body">Instead of finishing with stale context and needing a follow-up run, a running agent absorbs new events for the same work item in-flight. Implementation (<a href="https://github.com/fullsend-ai/fullsend/pull/6959">PR #6959</a>) is still <strong>open</strong>.</div>
-        </div>
-        <div class="timeline-entry planned">
-          <div class="timeline-date"><a href="https://github.com/fullsend-ai/fullsend/pull/7451">ADR 0119</a> &mdash; In-flight (GitHub)</div>
-          <div class="timeline-title">Steerwatch: poll platform run records for follow-up events</div>
-          <div class="timeline-body">The steerwatch polls the shim workflow's follow-up runs created after the current run started. Effectively an in-run poller, but scoped to a single entity. Open PRs #7447&ndash;#7461.</div>
-        </div>
-        <div class="timeline-entry">
-          <div class="timeline-date"><a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a> &mdash; Accepted, partially implemented (GitLab)</div>
-          <div class="timeline-title">Hybrid GitLab dispatch (webhook + poller backstop)</div>
-          <div class="timeline-body">ADR merged (<a href="https://github.com/fullsend-ai/fullsend/pull/7759">PR #7759</a>, Sep 28). Tracked via <a href="https://github.com/fullsend-ai/fullsend/issues/7766">epic #7766</a> (10 issues, 3 closed). Shipped: trigger-token CRUD (<a href="https://github.com/fullsend-ai/fullsend/pull/7780">#7780</a>), CAS dedup (<a href="https://github.com/fullsend-ai/fullsend/pull/7812">#7812</a>), override-role primitives (<a href="https://github.com/fullsend-ai/fullsend/pull/7813">#7813</a>). In progress: CI_JOB_TOKEN pinning (<a href="https://github.com/fullsend-ai/fullsend/pull/7817">#7817</a>). Remaining: dispatcher scaffold, event builder, CLI wiring, install/uninstall, e2e validation.</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ===== SHIP-GATING RISKS ===== -->
-    <div class="section" id="ship-gates">
-      <h2>Ship-Gating Risks</h2>
-      <p>
-        Before <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>'s webhook fast-path can ship, these items must be resolved.
-      </p>
-
-      <h3>Implementation Requirements</h3>
-      <div class="finding finding-medium">
-        <span class="badge badge-yellow">planned</span>
-        <div class="finding-title">Project-pinned API re-fetches</div>
-        <div class="finding-body">
-          Fail-closed API re-fetches with action-vs-state consistency validation.
-          Webhook payloads are untrusted hints; the dispatcher must re-derive entity
-          state from the API and validate that claimed transitions match current snapshots.
-        </div>
-      </div>
-      <div class="finding finding-resolved">
-        <span class="badge badge-green">done</span>
-        <div class="finding-title">Concurrency-safe dedup persists</div>
-        <div class="finding-body">
-          Both the webhook dispatcher and poller write to shared dispatch state.
-          CAS (compare-and-swap) poll-state persist shipped in
-          <a href="https://github.com/fullsend-ai/fullsend/pull/7812">PR #7812</a> (merged Sep 28).
-        </div>
-      </div>
-      <div class="finding finding-medium">
-        <span class="badge badge-yellow">planned</span>
-        <div class="finding-title">Dedicated webhook dispatcher CI include</div>
-        <div class="finding-body">
-          The webhook-triggered dispatcher must be a separate CI include from the
-          agent job template. This isolates the attack surface of trigger-token-initiated pipelines.
-        </div>
-      </div>
-      <div class="finding finding-medium">
-        <span class="badge badge-yellow">in progress</span>
-        <div class="finding-title">Identity pinning to CI_JOB_TOKEN</div>
-        <div class="finding-body">
-          Agent and poller gates must pin identity to the unforgeable <code>CI_JOB_TOKEN</code>
-          job record rather than overridable CI variables like <code>CI_PROJECT_ID</code>.
-          <a href="https://github.com/fullsend-ai/fullsend/pull/7817">PR #7817</a> is open.
-        </div>
-      </div>
-      <div class="finding finding-resolved">
-        <span class="badge badge-green">done</span>
-        <div class="finding-title">Deny-before-admit debug-tracing guard</div>
-        <div class="finding-body">
-          All fullsend jobs refuse to start under debug tracing. The <code>CI_DEBUG_TRACE</code>
-          guard runs at the top of the agent template, before any token-bearing operation.
-        </div>
-      </div>
-      <div class="finding finding-low">
-        <span class="badge badge-yellow">planned</span>
-        <div class="finding-title">Transport hardening</div>
-        <div class="finding-body">
-          HTTP clients must ignore trigger-influenced proxy and CA settings.
-          Prevents a trigger-token holder from MITM'ing API calls.
-        </div>
-      </div>
-      <div class="finding finding-low">
-        <span class="badge badge-yellow">partially done</span>
-        <div class="finding-title">Trigger-token rotation and redaction</div>
-        <div class="finding-body">
-          Trigger-token and webhook CRUD primitives shipped in
-          <a href="https://github.com/fullsend-ai/fullsend/pull/7780">PR #7780</a> (merged Sep 28).
-          Remaining: install-time provisioning (<a href="https://github.com/fullsend-ai/fullsend/issues/7772">#7772</a>),
-          operational rotation procedures, and log-redaction guarantees.
-        </div>
-      </div>
-
-      <h3>Open Risks (no solution yet)</h3>
-      <div class="finding finding-high">
-        <span class="badge badge-red">open</span>
-        <div class="finding-title">API base-URL pinning</div>
-        <div class="finding-body">
-          No unforgeable pin exists for the GitLab API base URL. The
-          <code>CI_API_V4_URL</code> variable is overridable, meaning a trigger-token
-          holder could potentially redirect API re-fetch calls to a malicious endpoint.
-          This undermines the entire re-fetch trust model.
-        </div>
-      </div>
-      <div class="finding finding-high">
-        <span class="badge badge-red">open</span>
-        <div class="finding-title">Snapshot-consistent replay</div>
-        <div class="finding-body">
-          An attacker holding the trigger token could replay actions that still match
-          current entity state. Polling-based event-time binding and dedup narrow this
-          window but don't close it entirely.
-        </div>
-      </div>
-    </div>
-
-  </main>
-</body>
-</html>
+No credentials or source payload are included.</pre>
+<p>The dispatcher fetches the current issue, activity, and actor permission evidence, then loads configuration revision R7. This produces normalized entity/activity and actor context. The stable activity identity identifies the observation; a current issue snapshot alone does not prove an old transition.</p>
+<h3>Independent context evaluation</h3>
+<div class="table-wrap" role="region" tabindex="0"><table><caption class="sr-only">Illustrative context matching and selection outcomes</caption><thead><tr><th scope="col">Context</th><th scope="col">Illustrative condition</th><th scope="col">Selection result</th><th scope="col">Target and output</th></tr></thead><tbody>
+<tr><td><code>planning</code> (repository-less)</td><td>Actor is authorized, issue has <code>ai:analyze</code>, and the registered analysis harness trigger matches.</td><td>Selected run A: agent <code>planning-analysis</code>. Role/authority is recorded separately from the agent name.</td><td>No repository target. Result is summarized to the configured Jira output destination.</td></tr>
+<tr><td><code>service-a</code> (repository-bound)</td><td>Configured source association links PROJ-42 to service-a and label <code>ready-for-triage</code> matches the registered trigger.</td><td>Selected run B: agent <code>repository-triage</code>. It is not a review run.</td><td>Target is service-a's configured repository/ref. Output destination is the configured repository result destination.</td></tr>
+<tr><td><code>service-b</code></td><td>No configured association with this source.</td><td>Not evaluated for this candidate.</td><td>No run.</td></tr></tbody></table></div>
+<h3>Admission, replay, and partial fan-out</h3>
+<div class="table-wrap" role="region" tabindex="0"><table><caption class="sr-only">Illustrative run admission, replay, and acknowledgement steps</caption><thead><tr><th scope="col">Step</th><th scope="col">Evidence and action</th><th scope="col">Acknowledgement condition</th></tr></thead><tbody>
+<tr><td>Selection</td><td>Record the selected set A and B with the configuration revision used. Recovery reuses this admitted set; a deliberate reselection/replay is a separate policy.</td><td>A selection error remains retryable and is not recorded as no-match.</td></tr>
+<tr><td>Admit A</td><td>Run record binds candidate observation + context + agent + target/output. Create Job A and record its Kubernetes identity.</td><td>Selected-run admission is accepted when responsibility can be recovered from the run record and Job identity.</td></tr>
+<tr><td>Create response lost</td><td>Dispatcher crashes after Job A is created but before receiving its response; Job B is not created. Recovery finds and validates A by stable run identity, then admits B.</td><td>Do not acknowledge missing B until B is recorded or a terminal no-op/rejection is recorded.</td></tr>
+<tr><td>Duplicate observation</td><td>Polling discovers activity 100042 again, or a later webhook reports the same provider activity. Candidate identity converges to the existing selection and admitted run records.</td><td>Redelivery is safe because accepted responsibility and run identities survive restart.</td></tr>
+<tr><td>Active-active variant</td><td>Inbox accepts once and delivers at least once. Another dispatcher claims the candidate, recovers A, and creates missing B. No transaction spans inbox acknowledgement and Kubernetes create.</td><td>Consumer acknowledgement follows recoverable handling for A and B, or a recorded no-match/rejection.</td></tr>
+</tbody></table></div>
+<p class="small">Pilot persistence is intentionally not specified as a database. The selected set and recoverable run identity are logical requirements; implementation must show which pilot record/checkpoint provides them. In-memory delivery alone is not durable.</p>
+<h3>Candidate, run, and workload lifecycle</h3>
+<div class="table-wrap" role="region" tabindex="0"><table><caption class="sr-only">Candidate, selected-run, workload, and result lifecycle</caption><thead><tr><th scope="col">Object</th><th scope="col">Lifecycle</th><th scope="col">Owner and meaning</th></tr></thead><tbody>
+<tr><td>Candidate</td><td>Observed → accepted handoff → selected, no-match, or rejected</td><td>Producer/dispatcher. No-match is distinct from read or evaluation failure.</td></tr>
+<tr><td>Selected run</td><td>Admitted → pending → running → succeeded, failed, or cancelled</td><td>Fullsend run policy and result record. Admission identifies intended agent/context/target/output.</td></tr>
+<tr><td>Workload</td><td>Job created → Pod pending/running/terminated → Job cleanup</td><td>Kubernetes status describes workload execution, not by itself application success.</td></tr>
+<tr><td>Result</td><td>Recorded/reported → retained according to policy</td><td>Fullsend/output integration. Result retention may outlive Job and Pod cleanup.</td></tr>
+</tbody></table></div>
+</section>
+<section id="components">
+<h2>Component comparison</h2>
+<p>Each cell answers the responsibility named by its row. “GitLab desired” describes an ADR direction, not code already connected to the poller. Kubernetes cells describe a proposal.</p>
+<div class="table-wrap wide" role="region" tabindex="0"><table><caption class="sr-only">Comparison of repository CI and centralized Kubernetes responsibilities</caption><thead><tr><th scope="col">Responsibility</th><th scope="col">GitHub Actions</th><th scope="col">GitLab CI — current</th><th scope="col">GitLab CI — desired</th><th scope="col">Centralized Kubernetes — proposed</th></tr></thead><tbody>
+<tr><td>Event subscription</td><td>Platform workflow events invoke repository shim/workflow.</td><td>Scheduled pollers discover changes; current native MR pipeline was removed in #7322.</td><td>ADR 0125 describes webhook plus polling backstop; webhook integration is not in the current scaffold.</td><td>Authenticated source webhook may be added as another candidate producer over an approved private route.</td></tr>
+<tr><td>Polling schedule</td><td>Separate schedules run prioritization and scribe workflows.</td><td>Cron schedules run slash and event pollers.</td><td>Polling remains the recovery/backstop mechanism.</td><td>Scheduler invokes existing source polling logic; CronJob/service/timer arrangement remains open.</td></tr>
+<tr><td>Forge CI invocation</td><td><code>workflow_call</code> enters shared dispatcher; selected agent work uses workflow/matrix dispatch.</td><td>Poller calls GitLab pipeline API for agent work.</td><td>Webhook-triggered dispatcher pipeline is ADR direction.</td><td>Centralized Kubernetes dispatcher and launcher call Kubernetes API; no forge CI invocation is required.</td></tr>
+<tr><td>Candidate handoff</td><td>Workflow/event context is passed through repository dispatch.</td><td>Poller discovery and pipeline creation remain coupled.</td><td>Webhook and polling producers converge on a candidate handoff.</td><td>Source-neutral reference feeds one direct pilot handoff; optional shared inbox later.</td></tr>
+<tr><td>Event normalization</td><td>Existing event input conversion prepares dispatcher data.</td><td>Poller conversion and API enrichment produce current Go router input.</td><td>Common normalization is a direction; poller is not wired to the CEL core.</td><td>Adapter refetches trusted current data and produces normalized entity/activity/actor input.</td></tr>
+<tr><td>Routing: first-party and custom</td><td>Legacy shell routing and CEL harness evaluation coexist for supported inputs.</td><td>Current hardcoded Go router handles supported stages and slash commands.</td><td>CEL selection is the desired shared mechanism.</td><td>Evaluate every authorized matching registered harness in each applicable context.</td></tr>
+<tr><td>Harness input</td><td>Current dispatch contracts define their event or normalized input.</td><td>Current router is event/source-specific.</td><td>ADR 0098 describes entity-first evaluation with nullable event.</td><td>Extend current event-required API to proposed entity/activity input; repository-less auth needs adaptation.</td></tr>
+<tr><td>Deduplication</td><td>Concurrency groups can cancel/replace work; they are not a durable queue or exactly-once guarantee.</td><td>Signed poll-state branches hold watermarks and dispatched/failed keys; CAS protects state writes.</td><td>CAS supports shared-state updates but does not atomically commit external pipeline creation.</td><td>Candidate observation identity and selected-run identity handle different duplicates; Job create recovery uses run identity.</td></tr>
+<tr><td>Concurrency and ordering</td><td>Groups are per configured stage/entity; current workflow sets <code>cancel-in-progress: true</code>.</td><td>Poll groups are per poll mode; agent groups are per stage/resource. <code>newest_first</code>/<code>oldest_first</code> set order.</td><td>Resource groups provide CI ordering; they do not choose application coalescing or steering policy.</td><td>Fullsend admission policy controls same-entity runs; exact granularity and follow-up behavior remain open.</td></tr>
+<tr><td>State storage</td><td>Workflow/run history and separate scheduled-task state.</td><td>Poll state is persisted in signed branches; Jira poller checkpoints after dispatch-file write.</td><td>State persistence does not make external pipeline launch atomic.</td><td>Pilot checkpoint/handoff/run evidence is an implementation gap; shared durable coordination is optional later.</td></tr>
+<tr><td>Dispatch integrity</td><td><code>workflow_call</code> binds caller workflow context, not arbitrary event content.</td><td>HMAC and pipeline source/user checks protect current dispatcher-to-agent boundary.</td><td>Webhook payload remains an untrusted hint; API re-fetch and trigger-token isolation are required.</td><td>Only authorized launcher creates approved Job spec; restrict Kubernetes write scope and bind run to workload.</td></tr>
+<tr><td>Source credentials</td><td>Workload presents OIDC assertion; central mint returns scoped GitHub App installation token.</td><td>Protected role tokens are selected for Poller, Analyst, Coder, or configured roles; job identity uses <code>CI_JOB_TOKEN</code> record.</td><td>Trigger token, if used, is separate from agent source credentials.</td><td>PoC uses scoped static source secret; service and run credential flows are defined separately.</td></tr>
+<tr><td>Inference credentials</td><td>OIDC assertion is exchanged through GCP WIF for short-lived inference access.</td><td>GitLab OIDC <code>id_tokens</code> is exchanged through GCP WIF.</td><td>Not a webhook/trigger-token concern.</td><td>Static PoC secret; separately validate projected identity for inference access.</td></tr>
+<tr><td>Runner and executor</td><td>GitHub-hosted runner invokes <code>fullsend run</code> on configured image.</td><td>Self-hosted runner invokes CLI in configured container.</td><td>Agent execution remains a separate pipeline stage.</td><td>Restricted Job Pod invokes <code>fullsend run</code>; remote sandbox operated by the gateway is separate.</td></tr>
+<tr><td>CLI packaging</td><td>Workflow installs the CLI through the action/release mechanism.</td><td>CI template downloads verified release or builds CLI.</td><td>Keep repository installation behavior.</td><td>Version-pinned run image is proposed; packaging details remain open.</td></tr>
+<tr><td>Sandbox</td><td>Podman sandbox runs on CI runner host.</td><td>Podman sandbox runs within configured runner container.</td><td>CI still owns runner lifecycle.</td><td>Remote OpenShell gateway operates sandbox; sandbox owns workspace PVC, Job does not mount it.</td></tr>
+<tr><td>CI template / Job spec</td><td>Reusable workflow is the repository dispatch/execution template.</td><td>Agent template parameterizes stage and resource key.</td><td>Webhook dispatcher include is a separate proposed CI component.</td><td>Trusted Job specification plus launcher adapter replaces forge pipeline scaffolding for centralized Kubernetes mode.</td></tr>
+<tr><td>Result and history</td><td>Workflow reports run status/logs/artifacts under platform retention.</td><td>Pipeline reports status/artifacts under GitLab retention.</td><td>Webhook integration still needs operator-visible delivery and run history.</td><td>Fullsend correlates candidate, selected run, Job, Pod, and explicit output destination; retention integration is required.</td></tr>
+</tbody></table></div>
+</section>
+<section id="responsibilities-ci">
+<h2>Responsibilities currently supplied by CI</h2>
+<p>CI provides useful mechanisms, but application decisions remain in Fullsend. Kubernetes adds workload scheduling, status, retry/deadline mechanisms, and access control; it does not decide tenant fairness, source authorization, candidate identity, or result retention.</p>
+<div class="table-wrap wide" role="region" tabindex="0"><table><caption class="sr-only">Current CI ownership and proposed centralized Kubernetes ownership across Fullsend, Kubernetes, and external services</caption><thead><tr><th scope="col">Responsibility</th><th scope="col">GitHub CI today</th><th scope="col">GitLab CI today</th><th scope="col">Fullsend policy and logic</th><th scope="col">Kubernetes mechanism</th><th scope="col">External service/operator</th><th scope="col">Reuse</th><th scope="col">Remaining behavior</th></tr></thead><tbody>
+<tr><td>Discovery and delivery authentication</td><td>Actions event context invokes repository workflow.</td><td>Fullsend pollers query GitLab API; actor authorization is Fullsend logic.</td><td>Own source adapters, candidate validation, and actor/context authorization.</td><td>Schedule restricted poller/receiver workloads and enforce service RBAC.</td><td>Source APIs and an approved private webhook route.</td><td>Pollers, source APIs, normalization.</td><td>Register the source/tenant binding and webhook verification contract.</td></tr>
+<tr><td>Scheduling and missed work</td><td>Actions event triggers and schedules.</td><td>GitLab schedules invoke Fullsend poll jobs.</td><td>Own polling checkpoints, reconciliation, and replay policy.</td><td>Supply scheduler/CronJob mechanisms and workload deadlines.</td><td>Source API availability and rate limits.</td><td>Existing polling/checkpoint logic.</td><td>Choose timer arrangement; recover missed intervals and authorize manual replay.</td></tr>
+<tr><td>Candidate handoff and recovery</td><td>Workflow/run history carries invocation context.</td><td>Poller state and pipeline request cross separate persistence effects.</td><td>Define candidate identity, acceptance, selected-run record, and acknowledgment.</td><td>Provide Job lookup/status; no queue semantics implied.</td><td>Optional durable inbox/ledger service in later phase.</td><td>Separate candidate handoff from poller and dispatch implementations.</td><td>Pilot evidence must survive restart; inbox is not mandatory for pilot.</td></tr>
+<tr><td>Actor and context authorization</td><td>Source permission APIs plus Fullsend checks.</td><td>Members API/source checks plus Fullsend stage policy.</td><td>Own actor, tenant, context, harness, and kill-switch policy.</td><td>Enforce namespace/RBAC/resource scope after application decision.</td><td>Forge/tracker permission APIs and identity provider.</td><td>Authorization logic where current assumptions fit.</td><td>Adapt repository OWNERS assumptions for centralized Kubernetes/repository-less contexts.</td></tr>
+<tr><td>Run admission, ordering, and fairness</td><td>Concurrency groups provide platform-level coordination.</td><td>Resource groups order pollers and agent jobs separately.</td><td>Choose admission keys, fairness, backpressure, and follow-up behavior.</td><td>Schedule admitted Jobs and enforce configured quota/resource limits.</td><td>Optional inbox/service may buffer work but does not implement fairness by itself.</td><td>Candidate and source identities.</td><td>Choose same-entity granularity and second-observation policy.</td></tr>
+<tr><td>Cancellation, retry, and timeout</td><td>Actions cancellation and job-timeout mechanisms.</td><td>Pipeline/resource-group controls and job timeouts.</td><td>Define application retry, cancellation, and terminal outcomes.</td><td>Enforce Job deadlines, restart policy, and workload status.</td><td>Remote gateway must honor cancellation and clean sandbox.</td><td>Run lifecycle and CLI signals.</td><td>Specify idempotent retry and distinguish Job failure from application outcome.</td></tr>
+<tr><td>Workload identity and credentials</td><td>OIDC claims/secrets; GitHub App mint.</td><td>Protected role tokens, job-token identity, OIDC inference access.</td><td>Define resource scopes and which component holds each credential.</td><td>Supply service accounts and PoC Secrets within RBAC boundaries.</td><td>Identity provider, source mint, inference provider, gateway issuer.</td><td>Existing mint/auth code where trust boundary fits.</td><td>Separate launcher, Job, source, inference, gateway, and output credentials.</td></tr>
+<tr><td>Runner and workspace</td><td>Actions runner allocation and workflow image.</td><td>Self-hosted runner selection and container.</td><td>Invoke <code>fullsend run</code> and correlate execution reference.</td><td>Schedule restricted Job Pod and report Job/Pod state.</td><td>Remote gateway owns sandbox and workspace PVC.</td><td>Existing runner and sandbox integration.</td><td>Version pinning, transfer, isolation, provenance, and cleanup.</td></tr>
+<tr><td>Logs and artifacts</td><td>Workflow logs and configured artifacts.</td><td>Pipeline logs and configured artifacts.</td><td>Correlate logs/results with candidate and selected run.</td><td>Expose workload logs/status mechanisms.</td><td>Storage/telemetry service retains artifacts and logs.</td><td>Current result/source clients.</td><td>Choose retention, alerting, redaction, and operator visibility.</td></tr>
+<tr><td>Status and audit</td><td>Workflow status and platform run history.</td><td>Pipeline status and platform run history.</td><td>Report application result and preserve run/audit identity.</td><td>Provide workload conditions and cleanup lifecycle.</td><td>Source status API and audit/retention integration.</td><td>Result adapters and execution references.</td><td>Define audit ownership beyond Job cleanup.</td></tr>
+</tbody></table></div>
+</section>
+<section id="state-identity-recovery">
+<h2>State, identity, and recovery</h2>
+<p>There are two acceptance boundaries. A producer may acknowledge a candidate only after responsibility for that candidate can be recovered. A dispatcher may acknowledge handling only after every selected run is recoverably admitted, or a terminal no-match/rejection is recorded. In inbox mode, durable enqueue can accept before selection; consumer acknowledgement follows recoverable handling.</p>
+<div class="table-wrap wide" role="region" tabindex="0"><table><caption class="sr-only">State owners and restart/replay implications</caption><thead><tr><th scope="col">State</th><th scope="col">Owner</th><th scope="col">Survives restart / replay implication</th></tr></thead><tbody>
+<tr><td>Entity content and permissions</td><td>Forge/tracker</td><td>Refetch current state; do not treat snapshot as proof of a past transition.</td></tr><tr><td>Desired configuration</td><td>Manifest/config delivery</td><td>Bind selected revision to a selection; authority and delivery remain open.</td></tr><tr><td>Source checkpoint/provider revision</td><td>Poller state</td><td>Advance only after candidate handoff is accepted; retain a replay mechanism.</td></tr><tr><td>Candidate responsibility</td><td>Direct pilot contract; optional inbox later</td><td>Accepted handoff must survive process restart; in-memory channel is not durable.</td></tr><tr><td>Selected set and run records</td><td>Fullsend dispatcher/ledger or documented pilot equivalent</td><td>Recovery reuses admitted agent/context/target/output set and config revision; deliberate reselection is explicit.</td></tr><tr><td>Concurrency and follow-up observations</td><td>Fullsend policy</td><td>Deduplication and source leases do not define queue/coalesce/steer/cancel behavior.</td></tr><tr><td>Job/Pod status</td><td>Kubernetes</td><td>Correlate to selected run; replacement Pod may repeat program execution.</td></tr><tr><td>Result, output, and audit</td><td>Explicit result/retention integration</td><td>Retain required tombstones and output beyond Job cleanup.</td></tr></tbody></table></div>
+<h3>Illustrative identities (not API fields)</h3>
+<div class="table-wrap" role="region" tabindex="0"><table><caption class="sr-only">Illustrative candidate, selected-run, and concurrency identities</caption><thead><tr><th scope="col">Identity</th><th scope="col">Example key</th><th scope="col">Controls</th></tr></thead><tbody><tr><td>Candidate observation</td><td>tenant + registered source + canonical entity + provider activity/revision</td><td>Convergence between poll and webhook when provider identity allows.</td></tr><tr><td>Selected run</td><td>candidate + context + agent + target/output + selected config revision</td><td>One intended admission per selected run; replay policy decides when to create another.</td></tr><tr><td>Concurrency slot</td><td>tenant + context + entity + agent/role</td><td>Illustrative granularity only; policy remains open.</td></tr></tbody></table></div>
+<h3>Failure and recovery contract</h3>
+<div class="table-wrap wide" role="region" tabindex="0"><table><caption class="sr-only">Failure recovery evidence, action, and acknowledgement conditions</caption><thead><tr><th scope="col">Failure point</th><th scope="col">Durable evidence available</th><th scope="col">Recovering component / next action</th><th scope="col">Acknowledgement condition</th></tr></thead><tbody>
+<tr><td>Before handoff acceptance</td><td>No accepted candidate record</td><td>Producer rediscovers candidate; do not advance checkpoint.</td><td>Not acknowledged.</td></tr><tr><td>Direct handoff accepted, checkpoint not updated</td><td>Recoverable handoff/run identity</td><td>Producer may redeliver; dispatcher finds same candidate.</td><td>Acknowledge after handoff evidence exists.</td></tr><tr><td>Inbox accepted, consumer crashes before claim</td><td>Durable inbox item</td><td>Another dispatcher claims it.</td><td>Producer already accepted durable enqueue; consumer has not acknowledged.</td></tr><tr><td>Selection/config read temporarily fails</td><td>Candidate remains pending/retryable</td><td>Retry; do not convert error to no-match.</td><td>Only after retryable responsibility is retained.</td></tr><tr><td>No match or unauthorized</td><td>Fresh evaluation and explicit terminal outcome</td><td>Record observable no-op/rejection and reason within policy.</td><td>May acknowledge after terminal outcome is recorded.</td></tr><tr><td>Partial fan-out: some Jobs created</td><td>Selected set plus per-run Job identities/status</td><td>Find existing Jobs and create missing selected runs.</td><td>Only after every selected run is recoverably admitted or terminally rejected.</td></tr><tr><td>Job create succeeds; response is lost</td><td>Stable run identity and possibly existing Job</td><td>Launcher finds and validates Job before retrying create.</td><td>After Job association is recorded.</td></tr><tr><td>Job deleted / Pod replaced</td><td>Run record/tombstone independent of workload retention</td><td>Apply replay horizon and effect idempotency; avoid duplicate external effects.</td><td>Application result remains recorded separately.</td></tr><tr><td>Poison candidate or repeated first batch</td><td>Retry count, quarantine/replay record, source cursor</td><td>Bounded source queries and quarantine let later candidates progress.</td><td>Do not silently lose or starve later eligible work.</td></tr><tr><td>GitLab state CAS races pipeline creation</td><td>CAS protects state writes only</td><td>Reconcile external launch against persisted state; CAS and pipeline creation are not one atomic operation.</td><td>Use explicit recovery, not an exactly-once claim.</td></tr></tbody></table></div>
+<p class="small">A Kubernetes Job may create a replacement Pod, and an external effect may repeat even when the Job name is stable. Job deletion/TTL cleanup removes Job history; retain run identity or a bounded replay horizon outside that lifecycle.</p>
+</section>
+<section id="security">
+<h2>Security model</h2>
+<p>Each boundary needs a caller, protected resource, proof, and limited authority. Transport provenance authenticates where an event came from; it does not make issue content or caller-controlled fields trusted.</p>
+<div class="table-wrap wide" role="region" tabindex="0"><table><caption class="sr-only">Security boundaries, validation, and granted authority</caption><thead><tr><th scope="col">Boundary</th><th scope="col">Caller and protected resource</th><th scope="col">Proof / validation</th><th scope="col">Authority granted and remaining limit</th></tr></thead><tbody>
+<tr><td>Event → dispatcher</td><td>Actions workflow, GitLab poller, or future webhook receiver; protects source registration and candidate admission.</td><td>Verify delivery/source identity; bind it to registered tenant/source; refetch entity/activity using trusted endpoints.</td><td>May submit a candidate reference. Payload cannot choose credentials, tenant, namespace, Job spec, or privileged ref.</td></tr>
+<tr><td>Dispatcher → launcher</td><td>Authorized Fullsend dispatcher; protects run admission and workload policy.</td><td>Validate selected run, tenant/context authorization, config revision, and trusted Job policy.</td><td>May request only an approved workload. Run ID and acknowledgement are recovery evidence, not caller authentication.</td></tr>
+<tr><td>Launcher → Kubernetes API</td><td>Service identity; protects Job/Pod resources and namespaces.</td><td>Scoped Kubernetes RBAC and approved service configuration; verify run-to-Job binding.</td><td>Create/read permitted Jobs only. Kubernetes RBAC does not replace application authorization.</td></tr>
+<tr><td>Job → remote gateway/sandbox</td><td>Job and gateway; protects sandbox, workspace, and transferred inputs/results.</td><td>Authenticate gateway connection; validate workspace/run binding and transfer boundaries.</td><td>PoC must demonstrate workspace separation and result transfer. Gateway credential may differ from Job credential.</td></tr>
+<tr><td>Agent → forge/tracker</td><td>Run or sandbox; protects source repositories and tracker APIs.</td><td>Scoped source credential; authorize actor and tenant/context separately from credential issuance.</td><td>Static PoC secret is limited; production federation/mint route remains to be proven.</td></tr>
+<tr><td>Agent → inference</td><td>Run or sandbox; protects inference-provider access.</td><td>Static PoC secret or projected workload assertion exchanged by the inference provider.</td><td>Grant inference authority only. Repository mint is a separate credential flow.</td></tr>
+<tr><td>Workload identity</td><td>Dispatcher service account, Job service account, and sandbox identity are separate.</td><td>Bind approved image/ref/config and identities; validate tenant/resource scope. Labels alone do not prove tenant authority.</td><td>PoC demonstrates selected identity binding; do not claim full production federation.</td></tr>
+<tr><td>Debug, logs, artifacts</td><td>Service, Job, sandbox, log/artifact store.</td><td>Redact secrets and untrusted values across logs, traces, and artifacts; restrict access and debug mode.</td><td>Existing platform guards do not by themselves prove no secret-exposure risk.</td></tr>
+<tr><td>Fork and untrusted changes</td><td>Source event may reference fork, external branch, or untrusted config.</td><td>Validate source/target provenance; select trusted configuration/ref; restrict privileged execution on untrusted changes.</td><td>Actor refetch and a repository kill switch do not alone establish fork safety.</td></tr>
+<tr><td>Actor and context authorization</td><td>Initiating actor, tenant/context policy, and workload resource scope.</td><td>Check source permission, tenant policy, applicable context authorization, and allowed workload scope independently.</td><td>Repository-less execution still requires explicit authorization.</td></tr>
+</tbody></table></div>
+<p>The GitLab trigger-token threat model remains platform-specific: possession can start a privileged dispatcher pipeline, so trigger-supplied variables require API re-fetch, transport hardening, log redaction, and rotation. It is not a Kubernetes credential requirement. GitHub <code>workflow_call</code> supplies caller workflow context, but source content and arbitrary inputs still require validation.</p>
+</section>
+<section id="credentials">
+<h2>Credential model</h2>
+<p>The GitHub App key stays at the <a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/mintcore/">mint service</a>. The workflow presents its OIDC assertion; the mint verifies the assertion and returns a scoped installation token. These are separate custody and workload-identity steps.</p>
+<div class="table-wrap" role="region" tabindex="0"><table><caption class="sr-only">Credential flows by consumer and protected resource</caption><thead><tr><th scope="col">Consumer → resource</th><th scope="col">Credential holder and issuer</th><th scope="col">Scope and validation</th><th scope="col">Lifecycle / status</th></tr></thead><tbody>
+<tr><td>GitHub workflow → source API</td><td>App private key remains in central mint; workflow holds short-lived returned installation token.</td><td>Workflow OIDC assertion is checked against workflow identity; token is repository/permission scoped.</td><td>Current repository installation; existing mint service.</td></tr><tr><td>GitLab poller/agent → GitLab API</td><td>Protected role token held in CI variables; job identity checked through <code>CI_JOB_TOKEN</code> record.</td><td>Role-token selection supports Poller, Analyst, Coder, and configured custom roles.</td><td>Current scaffold; not a blanket Maintainer PAT model.</td></tr><tr><td>Centralized poller → source API</td><td>Static source secret in execution PoC; later delivery mechanism open.</td><td>Source/tenant-specific API scope and registered source binding.</td><td>PoC then validate production issuance, refresh, rotation, and revocation.</td></tr><tr><td>Webhook receiver → delivery verification</td><td>Receiver holds source verification material, separate from run credentials.</td><td>Verify signature/issuer, replay window, and registered tenant/source.</td><td>Later feature; private route and verification choice open.</td></tr><tr><td>Launcher → Kubernetes API</td><td>Launcher service identity.</td><td>RBAC limited to approved namespaces/resources and Job operations.</td><td>Centralized service requirement.</td></tr><tr><td>Job/sandbox → source API</td><td>Static scoped source secret for PoC; future federation/private mint option must be validated.</td><td>Repository/tracker access only as required by the selected run.</td><td>Execution PoC followed by credential experiment.</td></tr><tr><td>Job/sandbox → inference provider</td><td>Static inference secret for PoC; projected workload identity is an experiment option.</td><td>Inference authority only; never treat repository access as inference access.</td><td>One of inference federation or private repository mint may satisfy the identity experiment, but a full service needs every resource credential it uses.</td></tr><tr><td>Runner → remote gateway</td><td>Gateway connection credential; holder and issuer are not assumed identical to Job identity.</td><td>Bind to run/workspace and restrict input/output transfer.</td><td>PoC must validate gateway authentication, scope, refresh, and cleanup.</td></tr><tr><td>Result reporter → output destination</td><td>Explicit output credential owned by reporting integration.</td><td>Restrict to configured Jira/repository/result destination; no payload-selected target.</td><td>Destination-specific issuance and retention remain open.</td></tr>
+</tbody></table></div>
+<p>Kubernetes Secrets are sufficient for the stated PoC. Later secret delivery and rotation are open. The historical project-count row is retained in the original report; a centralized Kubernetes credential count depends on consumer, resource, and trust boundary, not a presumed one-token-per-tenant rule.</p>
+</section>
+<section id="events">
+<h2>Event coverage and latency</h2>
+<p>Coverage is a source-adapter capability, not a Kubernetes guarantee. Distinguish source notification/discovery wait, candidate backlog and selection, then Job scheduling, image pull, and sandbox startup. No Kubernetes start-time SLA is proposed. The historical sub-second and polling numbers remain in the archived report and are not current workload-start guarantees.</p>
+<div class="table-wrap wide" role="region" tabindex="0"><table><caption class="sr-only">Event coverage requirements and discovery/start timing</caption><thead><tr><th scope="col">Work trigger</th><th scope="col">GitHub Actions</th><th scope="col">GitLab CI current</th><th scope="col">Centralized Kubernetes adapter requirement</th><th scope="col">Discovery/start timing</th></tr></thead><tbody>
+<tr><td>Issue creation/activity</td><td>Workflow issue events.</td><td>Event poller reads issues and activity.</td><td>Adapter must discover creation/activity and refetch current entity.</td><td>Depends on source notification/poll cadence, backlog, Job scheduling, and sandbox startup.</td></tr><tr><td>Slash command</td><td>Comment events.</td><td>Dedicated slash poller discovers <code>/fs-*</code> comments.</td><td>Needs comment identity, actor, body, and replay-safe observation identity.</td><td>Historical poll cadence is not an agent start guarantee.</td></tr><tr><td>Labels</td><td>Workflow label events.</td><td>Poller compares entity/label state.</td><td>Needs reliable label transition/current-state semantics; historical transitions may require provider revision.</td><td>Adapter and backlog dependent.</td></tr><tr><td>PR/MR lifecycle and review</td><td>Workflow events include pull request and review events.</td><td>Current scaffold discovers merge-request activity through cron polling; native MR pipeline was removed in #7322.</td><td>Source adapter must expose lifecycle/review activity and actor evidence.</td><td>Poll wait or notification wait plus queue and workload start.</td></tr><tr><td>Jira activity</td><td>Not a forge event integration.</td><td>Not a GitLab CI event integration.</td><td>Jira adapter discovers activity identity, then fetches issue/activity and actor permission evidence. Example only; pilot source undecided.</td><td>Depends on Jira poll cadence and backlog for centralized Kubernetes.</td></tr><tr><td>Scheduled prioritize</td><td>Existing scheduled workflow.</td><td>No equivalent current dispatch in this comparison.</td><td>Needs time-triggered invocation and context policy; it is not a connector webhook.</td><td>Centralized Kubernetes support remains undecided.</td></tr>
+</tbody></table></div>
+<p>Historical event/latency claims remain available in the <a href="dispatch-architecture-github-gitlab-original-2026-09-30.html">original snapshot</a>. Current GitLab event polling runs on separate schedules; current Actions event context does not guarantee a runner starts within the event-notification interval.</p>
+</section>
+<section id="evolution-backlog">
+<h2>Evolution and backlog</h2>
+<p>This explains how existing components evolve to the centralized Kubernetes design. Repository installs remain intact; no pilot tenant CRD, tenant REST API, or Tekton dependency is proposed.</p>
+<div class="table-wrap wide" role="region" tabindex="0"><table><caption class="sr-only">Existing Fullsend component responsibilities and proposed evolution</caption><thead><tr><th scope="col">Layer / role</th><th scope="col">Current package responsibility</th><th scope="col">Proposed extraction or adaptation</th><th scope="col">Repository behavior preserved</th><th scope="col">Tracking</th></tr></thead><tbody>
+<tr><td>Configuration</td><td><a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/repos/manifest.go"><code>repos.Manifest</code></a> and filesystem loading; ADR 0123 accepted.</td><td>Extend contexts and bind selected config revision; ownership/delivery remains open.</td><td>Existing repository installations keep their manifests.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-57">AISDLC-57</a> · <a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/docs/ADRs/0123-tenant-configuration-from-repos-yaml.md">ADR 0123</a></td></tr>
+<tr><td>GitLab discovery and launch</td><td><a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/poll/poll.go"><code>internal/poll</code></a> couples source discovery, <a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/poll/state.go">state</a>, and <a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/poll/dispatch.go">pipeline creation</a>; state CAS does not include the external launch transaction.</td><td>Extract candidate handoff; retain GitLab adapter and repository launcher.</td><td>Current CI integrations continue to work.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-65">AISDLC-65</a></td></tr>
+<tr><td>Jira discovery and checkpoint</td><td><a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/jirapoll/poller.go"><code>internal/jirapoll</code></a> discovers Jira activity, evaluates CEL, and checkpoints after dispatch-file write; <a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/jirapoll/types.go">lock handoff phase</a> remains unfinished.</td><td>Produce source-neutral candidate references and define acknowledgement at accepted handoff.</td><td>Existing Jira polling remains usable while the centralized handoff evolves.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-65">AISDLC-65</a> · <a href="https://redhat.atlassian.net/browse/AISDLC-57">AISDLC-57</a></td></tr>
+<tr><td>Normalization</td><td><a href="https://github.com/fullsend-ai/fullsend/tree/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/normevent"><code>normevent</code></a>, source converters, and enrichment provide current event handling.</td><td>Extend evaluation input for entity/activity plus actor evidence; do not claim nullable-event support in the centralized implementation.</td><td>Keep current GitHub/GitLab integrations.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-65">AISDLC-65</a></td></tr>
+<tr><td>Authorization and routing</td><td><a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/harnessdispatch/core.go"><code>harnessdispatch.Dispatch</code></a> currently requires non-nil <code>Event</code>; <a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/harnessdispatch/project.go"><code>ConfigDir</code></a> assumes repository-root context for OWNERS. OWNERS role augmentation is conditional, not a requirement that every repo contain OWNERS.</td><td>Adapt trusted enrichment, independent contexts, repository-less authorization, all matching CEL harnesses, and observable error/no-match results.</td><td>Existing repository authorization remains where its assumptions apply.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-57">AISDLC-57</a> · <a href="https://redhat.atlassian.net/browse/AISDLC-70">AISDLC-70</a> · <a href="https://redhat.atlassian.net/browse/AISDLC-146">AISDLC-146</a></td></tr>
+<tr><td>CLI and launch adapters</td><td><a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/cli/dispatch.go"><code>fullsend dispatch</code></a> input drivers include <code>gha-event</code>/<code>json</code>; output projection includes <code>gha-matrix</code>/<code>json</code>. Output projection is not a Kubernetes launch.</td><td>Add a centralized candidate/run adapter and trusted Job launcher around existing CLI wiring; no current K8s output driver.</td><td>Preserve current CI input/output modes.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-65">AISDLC-65</a></td></tr>
+<tr><td>Execution and gateway</td><td><a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/internal/cli/run.go"><code>fullsend run</code></a> and sandbox integration provide execution core.</td><td>Run CLI in restricted Job; use separate remote OpenShell gateway for sandbox/workspace transfer.</td><td>Keep runner behavior and repository execution.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-63">AISDLC-63</a> · <a href="https://redhat.atlassian.net/browse/AISDLC-146">AISDLC-146</a></td></tr>
+<tr><td>Credentials and identity</td><td>GitHub mint and GitLab role-token selection/job identity exist for current integrations.</td><td>Validate static PoC credentials, then one federation/private-mint experiment; define every production resource credential separately.</td><td>Existing identity options remain.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-64">AISDLC-64</a></td></tr>
+<tr><td>Private placement</td><td>Not an existing Fullsend dispatcher component.</td><td>Deploy service and agent pools in private dev/prod ROSA HCP clusters; do not infer one namespace per tenant.</td><td>Repository installs remain independent.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-230">AISDLC-230</a></td></tr>
+</tbody></table></div>
+<h3>Phase progression</h3><p><strong>Pilot:</strong> one source, one poller/dispatcher, direct candidate handoff, current manifest model, and a launcher around <code>fullsend run</code>. <strong>Separate extensions:</strong> private webhook delivery and active-active shared coordination can be added independently after their contracts are proven. See the <a href="#architecture">two-phase deployment view</a>.</p>
+<p class="small">Adjacent work: <a href="https://redhat.atlassian.net/browse/AISDLC-144">AISDLC-144</a> concerns configuration precedence; <a href="https://redhat.atlassian.net/browse/AISDLC-143">AISDLC-143</a> is adjacent data/MCP access; <a href="https://redhat.atlassian.net/browse/AISDLC-56">AISDLC-56</a> is historical umbrella context, not proof that the service is implemented.</p>
+</section>
+<section id="adr-evolution">
+<h2>ADR history</h2>
+<p>The original ADR and PR-status text remains in the archived report. This timeline separates design acceptance from implementation evidence; labels and PR states are a September 30 snapshot unless linked source says otherwise.</p>
+<div class="table-wrap" role="region" tabindex="0"><table><caption class="sr-only">ADR decisions and implementation evidence</caption><thead><tr><th scope="col">Decision</th><th scope="col">Accepted direction</th><th scope="col">Implementation evidence / current limit</th></tr></thead><tbody>
+<tr><td>ADR 0008</td><td>GitHub cross-repository dispatch began with <code>workflow_dispatch</code> and PAT.</td><td>Superseded by central mint model.</td></tr><tr><td>ADR 0028 / 0067</td><td>GitLab moved from webhook bridge proposal to cron-polling dispatch.</td><td>Current scaffold polls; former native MR dispatch is removed.</td></tr><tr><td>ADR 0029 / 0041</td><td>Central GitHub token mint and synchronous <code>workflow_call</code>.</td><td>Current repository workflow and mint integrations; transport context is not trust in arbitrary payload content.</td></tr><tr><td>ADR 0054 / 0061</td><td>Authorization on dispatch routes and the CEL harness trigger model.</td><td>Selection components exist; GitLab poller is not wired to CEL.</td></tr><tr><td>ADR 0063</td><td>Polling-based work discovery.</td><td>Jira is an existing polling driver; its file checkpoint is not a durable candidate queue.</td></tr><tr><td>ADR 0098</td><td>Entity-first harness evaluation direction with entity required and event nullable.</td><td>Current <code>harnessdispatch.Dispatch</code> still requires a non-nil event.</td></tr><tr><td>ADR 0106 / 0113 / 0119</td><td>Serialize runs, coalesce follow-up events, and steerwatch.</td><td>GitHub currently has <code>cancel-in-progress: true</code>; steering PR/status details remain historical snapshot.</td></tr><tr><td>ADR 0123</td><td>Reuse <code>repos.Manifest</code> and filesystem loading; mounted ConfigMaps are a typical delivery mechanism.</td><td>Accepted 2026-09-24. Manifest authority and delivery remain open.</td></tr><tr><td>ADR 0125</td><td>GitLab webhook fast delivery with poller backstop.</td><td>Direction accepted; current scaffold routes through polling. Foundation primitives do not prove end-to-end webhook integration.</td></tr>
+</tbody></table></div>
+<p>Centralized Kubernetes architecture in this document is a proposal supported by backlog items, not an accepted ADR.</p>
+</section>
+<section id="ship-gates">
+<h2>Ship gates</h2>
+<p>Each phase needs a demonstrated behavior, not only an implementation topic. Experiment completion, pilot readiness, and production operations are separate milestones.</p>
+<div class="table-wrap wide" role="region" tabindex="0"><table><caption class="sr-only">Centralized Kubernetes phase capabilities and ship-gate evidence</caption><thead><tr><th scope="col">Capability / phase</th><th scope="col">Demonstration required</th><th scope="col">Unresolved blocker</th><th scope="col">Tracking</th></tr></thead><tbody>
+<tr><td>Execution PoC</td><td>Restricted Job runs representative work through remote gateway; transfers results; cleans sandbox/PVC resources on success, failure, and cancellation. Job does not mount sandbox PVC.</td><td>Gateway authentication, resource cleanup, and static source/inference PoC credentials.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-63">AISDLC-63</a></td></tr>
+<tr><td>Single-instance pilot</td><td>Two-context selection, no-match/error distinction, lost-create-response recovery, partial fan-out, restart and duplicate handling without mandatory broker/database.</td><td>Candidate acknowledgement and selected-run persistence evidence for direct handoff.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-65">AISDLC-65</a> · <a href="https://redhat.atlassian.net/browse/AISDLC-57">AISDLC-57</a></td></tr>
+<tr><td>Private webhook extension</td><td>Authenticate delivery on approved private route, converge with polling by provider identity, and recover missed delivery through polling.</td><td>Private network route, receiver owner, authentication/replay policy.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-66">AISDLC-66</a> · <a href="https://redhat.atlassian.net/browse/AISDLC-230">AISDLC-230</a></td></tr>
+<tr><td>Identity experiment</td><td>Demonstrate either projected inference identity or private repository mint and reject unauthorized claims.</td><td>Experiment does not establish all credentials required by a complete service.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-64">AISDLC-64</a></td></tr>
+<tr><td>Active-active extension</td><td>Multiple producers/consumers survive enqueue, claim, and create failures; no lost eligible work; controlled duplicate Jobs; observable backlog/retries; progress beyond one source batch.</td><td>Select coordination and retention contracts; no database/broker choice is made here.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-147">AISDLC-147</a></td></tr>
+<tr><td>Production operational readiness</td><td>Show credential refresh/rotation, audit/result retention, fairness/backpressure, alerting, and recovery ownership.</td><td>Operational SLOs and ownership are not covered by a pilot or implied by AISDLC-147.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-70">AISDLC-70</a> · <a href="https://redhat.atlassian.net/browse/AISDLC-230">AISDLC-230</a></td></tr>
+</tbody></table></div>
+</section>
+<section id="open-decisions">
+<h2>Open decisions</h2>
+<p>Fixed constraints are listed separately from choices so backlog requirements are not reopened accidentally.</p>
+<div class="table-wrap wide" role="region" tabindex="0"><table><caption class="sr-only">Open decisions, fixed constraints, and evidence needed</caption><thead><tr><th scope="col">Decision</th><th scope="col">Fixed constraints</th><th scope="col">Options / tradeoff</th><th scope="col">Phase affected</th><th scope="col">Evidence needed</th><th scope="col">Tracking</th></tr></thead><tbody>
+<tr><td class="decision">Pilot source</td><td>Jira is example only; one pilot source.</td><td>Choose one registered forge/tracker adapter.</td><td>Pilot</td><td>Adapter, authorization, and checkpoint behavior demonstrated.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-65">AISDLC-65</a></td></tr>
+<tr><td class="decision">Direct-handoff durability</td><td>No mandatory pilot DB/broker.</td><td>Recoverable local/service record or source rediscovery with stable run identity; exact mechanism remains open.</td><td>Pilot</td><td>Crash before/after acceptance and checkpoint replay.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-65">AISDLC-65</a></td></tr>
+<tr><td class="decision">Run/config revision and replay</td><td>Recovery must not silently reinterpret an admitted selection.</td><td>Bind selected set/config revision; deliberate replay may use a new identity or explicit override.</td><td>Pilot and active-active</td><td>Config changes and replay tests preserve recorded admission.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-57">AISDLC-57</a> · <a href="https://redhat.atlassian.net/browse/AISDLC-147">AISDLC-147</a></td></tr>
+<tr><td class="decision">Same-entity concurrency</td><td>Deduplication/inbox is not concurrency policy.</td><td>Choose slot granularity, ordering, queue/coalesce/steer/cancel-replace behavior.</td><td>Pilot policy and later follow-up</td><td>Competing runs and second observation have observable outcomes.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-147">AISDLC-147</a></td></tr>
+<tr><td class="decision">Manifest authority and delivery</td><td>Reuse <code>repos.Manifest</code>; filesystem loading accepted.</td><td>Choose owner, update process, and how selected revision is pinned.</td><td>Pilot</td><td>Revision is consistent across evaluation and Job launch.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-57">AISDLC-57</a> · <a href="https://github.com/fullsend-ai/fullsend/blob/d462a93207302c4c2385e5f6eaa1bd40f45f6e98/docs/ADRs/0123-tenant-configuration-from-repos-yaml.md">ADR 0123</a></td></tr>
+<tr><td class="decision">Private webhook route</td><td>Public cluster ingress excluded.</td><td>Choose private delivery/relay, receiver owner, authentication, and replay window.</td><td>Independent later extension</td><td>Delivery accepted and missed event recovered by polling.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-66">AISDLC-66</a> · <a href="https://redhat.atlassian.net/browse/AISDLC-230">AISDLC-230</a></td></tr>
+<tr><td class="decision">Credential options</td><td>PoC uses static source and inference secrets; experiment proves one selected identity option.</td><td>Projected inference federation, private repository mint, and per-resource issuance have different scopes and owners.</td><td>PoC, identity experiment, production</td><td>Validate every required source, inference, launcher, gateway, and output credential independently.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-64">AISDLC-64</a> · <a href="https://redhat.atlassian.net/browse/AISDLC-146">AISDLC-146</a></td></tr>
+<tr><td class="decision">Tenant authorization and placement</td><td>Private dev/prod ROSA HCP clusters; separate service/agent pools; no namespace-per-tenant assumption.</td><td>Define admins, repository-less authorization, allowed context, and resource scope.</td><td>Pilot/production</td><td>Unauthorized actor and workload claims are rejected across both context types.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-70">AISDLC-70</a> · <a href="https://redhat.atlassian.net/browse/AISDLC-230">AISDLC-230</a></td></tr>
+<tr><td class="decision">Shared coordination</td><td>Direct pilot remains supported.</td><td>Transactional inbox/run records, broker plus durable run records, or source-native coordination have different failure/retention tradeoffs.</td><td>Active-active</td><td>Crash injection around enqueue, claim, partial launch, and replay.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-147">AISDLC-147</a></td></tr>
+<tr><td class="decision">Retention and operations</td><td>Job/Pod cleanup does not define application-history retention.</td><td>Choose run/result/log/audit retention, alerting, and operational owner.</td><td>Production readiness</td><td>Reconstruct a completed, failed, and cleaned-up run after workload deletion.</td><td><a href="https://redhat.atlassian.net/browse/AISDLC-147">AISDLC-147</a></td></tr>
+</tbody></table></div>
+</section>
+<details id="historical-report"><summary>Original GitHub vs GitLab report — September 30, 2026</summary><p>The untouched original is retained byte-for-byte in the linked file. Open it here to review the historical wording, tables, links, and findings in their original presentation.</p><p><a href="dispatch-architecture-github-gitlab-original-2026-09-30.html">Open original report in a separate page</a></p><iframe title="Original September 30 dispatch report" src="dispatch-architecture-github-gitlab-original-2026-09-30.html" loading="lazy"></iframe></details>
+<footer class="footnote"><p>Code evidence is pinned to <a href="https://github.com/fullsend-ai/fullsend/tree/d462a93207302c4c2385e5f6eaa1bd40f45f6e98">Fullsend source commit d462a93</a>. Backlog descriptions are in <a href="dispatch-backlog-snapshot.md">the 2026-10-01 snapshot</a>. Primary platform references: <a href="https://kubernetes.io/docs/concepts/workloads/controllers/job/">Kubernetes Jobs</a>, <a href="https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency">GitHub workflow concurrency</a>, and <a href="https://docs.gitlab.com/ci/resource_groups/">GitLab resource groups</a>.</p><p><a href="#top">Back to top</a></p></footer>
+</main>
+</body></html>
