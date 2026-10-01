@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fullsend Dispatch Architecture: GitHub vs GitLab</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #ffffff;
+      --bg-surface:  #f6f8fa;
+      --text:        #1f2328;
+      --text-sec:    #656d76;
+      --border:      #d0d7de;
+      --accent:      #0969da;
+      --green:       #1a7f37;
+      --green-bg:    #dafbe1;
+      --red:         #cf222e;
+      --red-bg:      #ffebe9;
+      --yellow:      #bf8700;
+      --yellow-bg:   #fff8c5;
+      --purple:      #8250df;
+      --purple-bg:   #fbefff;
+      --neutral-bg:  #eaeef2;
+      --gh-color:    #0969da;
+      --gl-color:    #e24329;
+      --gl-color-bg: #fef0ec;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:          #0d1117;
+        --bg-surface:  #161b22;
+        --text:        #e6edf3;
+        --text-sec:    #8b949e;
+        --border:      #30363d;
+        --accent:      #58a6ff;
+        --green:       #3fb950;
+        --green-bg:    #0f2d16;
+        --red:         #f85149;
+        --red-bg:      #3d1114;
+        --yellow:      #d29922;
+        --yellow-bg:   #2e2206;
+        --purple:      #bc8cff;
+        --purple-bg:   #271a3a;
+        --neutral-bg:  #21262d;
+        --gh-color:    #58a6ff;
+        --gl-color:    #fc6d26;
+        --gl-color-bg: #2e1a0f;
+      }
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                   "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+    code, pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.875em;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .report-header { margin-bottom: 2rem; }
+    .report-header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.3;
+      margin-bottom: 0.5rem;
+    }
+    .report-meta {
+      color: var(--text-sec);
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .report-meta span + span::before { content: " · "; }
+
+    .badges { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.125rem 0.625rem;
+      border-radius: 2rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+    .badge-green  { background: var(--green-bg);  color: var(--green); }
+    .badge-red    { background: var(--red-bg);    color: var(--red); }
+    .badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
+    .badge-purple { background: var(--purple-bg); color: var(--purple); }
+    .badge-neutral { background: var(--neutral-bg); color: var(--text-sec); }
+
+    .toc {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 2rem;
+    }
+    .toc-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-sec);
+      margin-bottom: 0.5rem;
+    }
+    .toc ol { list-style: decimal; padding-left: 1.25rem; margin: 0; }
+    .toc li { padding: 0.125rem 0; font-size: 0.875rem; }
+
+    .section { margin-bottom: 2.5rem; }
+    .section h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      padding-bottom: 0.375rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+    .section h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin: 1.25rem 0 0.5rem;
+    }
+    .section p { margin-bottom: 0.75rem; }
+    .section ul, .section ol { padding-left: 1.5rem; margin-bottom: 0.75rem; }
+    .section li { margin-bottom: 0.25rem; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      margin-bottom: 1rem;
+    }
+    th {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      border-bottom: 2px solid var(--border);
+      font-weight: 600;
+      color: var(--text-sec);
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: var(--bg-surface); }
+
+    .finding {
+      border: 1px solid var(--border);
+      border-left-width: 4px;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.75rem;
+      position: relative;
+    }
+    .finding-high    { border-left-color: var(--red); }
+    .finding-medium  { border-left-color: var(--yellow); }
+    .finding-low     { border-left-color: var(--green); }
+    .finding-resolved { border-left-color: var(--purple); }
+    .finding-title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+      padding-right: 5rem;
+    }
+    .finding-body {
+      font-size: 0.875rem;
+      color: var(--text-sec);
+    }
+    .finding .badge {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+    }
+
+    .timeline { position: relative; padding-left: 1.5rem; }
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 0.35rem;
+      top: 0.25rem;
+      bottom: 0.25rem;
+      width: 2px;
+      background: var(--border);
+    }
+    .timeline-entry {
+      position: relative;
+      margin-bottom: 1rem;
+      padding-left: 0.75rem;
+    }
+    .timeline-entry::before {
+      content: "";
+      position: absolute;
+      left: -1.25rem;
+      top: 0.5rem;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--bg);
+    }
+    .timeline-entry.superseded::before { background: var(--text-sec); }
+    .timeline-entry.planned::before { background: var(--yellow); }
+    .timeline-entry.open-risk::before { background: var(--red); }
+    .timeline-date {
+      font-size: 0.75rem;
+      color: var(--text-sec);
+      font-weight: 600;
+    }
+    .timeline-title { font-weight: 600; margin: 0.125rem 0; }
+    .timeline-body { font-size: 0.875rem; color: var(--text-sec); }
+
+    code:not(pre code) {
+      background: var(--bg-surface);
+      padding: 0.125rem 0.375rem;
+      border-radius: 4px;
+      font-size: 0.8125rem;
+    }
+
+    /* === ARCHITECTURE DIAGRAM === */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 768px) {
+      .arch-grid { grid-template-columns: 1fr; }
+    }
+    .arch-col {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      background: var(--bg-surface);
+    }
+    .arch-col h4 {
+      font-size: 0.875rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .arch-col.gh h4 { border-bottom-color: var(--gh-color); color: var(--gh-color); }
+    .arch-col.gl h4 { border-bottom-color: var(--gl-color); color: var(--gl-color); }
+
+    .arch-node {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 0.375rem;
+      font-size: 0.8125rem;
+      position: relative;
+    }
+    .arch-node .node-label {
+      font-weight: 600;
+      display: block;
+    }
+    .arch-node .node-detail {
+      font-size: 0.75rem;
+      color: var(--text-sec);
+      display: block;
+      margin-top: 0.125rem;
+    }
+    .arch-node.current {
+      border-left: 3px solid var(--green);
+    }
+    .arch-node.planned {
+      border-left: 3px solid var(--yellow);
+      border-style: dashed;
+      border-left-style: solid;
+    }
+    .arch-node.open-risk {
+      border-left: 3px solid var(--red);
+      border-style: dashed;
+      border-left-style: solid;
+    }
+    .arch-node.shared {
+      border-left: 3px solid var(--purple);
+    }
+    .arch-connector {
+      text-align: center;
+      color: var(--text-sec);
+      font-size: 0.875rem;
+      padding: 0.125rem 0;
+      position: relative;
+    }
+    .arch-connector.branch {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+    }
+    .arch-group {
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      padding: 0.5rem;
+      margin-bottom: 0.375rem;
+    }
+    .arch-group-label {
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-sec);
+      margin-bottom: 0.375rem;
+    }
+    .arch-parallel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.375rem;
+    }
+    .arch-parallel .arch-node { margin-bottom: 0; }
+
+    /* === LEGEND === */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin: 1rem 0 1.5rem;
+      padding: 0.75rem 1rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.75rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+    .legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .legend-swatch.current { border-left: 3px solid var(--green); }
+    .legend-swatch.planned { border-left: 3px solid var(--yellow); border-style: dashed; border-left-style: solid; }
+    .legend-swatch.open-risk { border-left: 3px solid var(--red); border-style: dashed; border-left-style: solid; }
+    .legend-swatch.shared { border-left: 3px solid var(--purple); }
+
+    /* === LATENCY TABLE === */
+    .latency-fast { color: var(--green); font-weight: 600; }
+    .latency-slow { color: var(--yellow); font-weight: 600; }
+    .latency-none { color: var(--text-sec); font-style: italic; }
+
+    /* === SECURITY COMPARISON === */
+    .sec-row {
+      display: grid;
+      grid-template-columns: 160px 1fr 1fr;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+    .sec-row:first-child {
+      border-bottom: 2px solid var(--border);
+      font-weight: 600;
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--text-sec);
+    }
+    .sec-cell {
+      padding: 0.5rem 0.75rem;
+      vertical-align: top;
+    }
+    .sec-cell:not(:last-child) {
+      border-right: 1px solid var(--border);
+    }
+    .sec-row:nth-child(even) .sec-cell { background: var(--bg-surface); }
+
+    @media print {
+      body { max-width: 100%; padding: 0; font-size: 11pt; }
+      .toc, .section, .finding, pre, table, .arch-grid { break-inside: avoid; }
+      a { color: var(--text); }
+    }
+  </style>
+</head>
+<body>
+  <header class="report-header">
+    <h1>Fullsend Dispatch Architecture: GitHub vs GitLab</h1>
+    <div class="report-meta">
+      <span><a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a> context</span>
+      <span>2026-09-30</span>
+      <span>Current state + in-flight work</span>
+    </div>
+    <div class="badges">
+      <span class="badge badge-green">7 current ADRs</span>
+      <span class="badge badge-yellow">5 in-flight ADRs</span>
+      <span class="badge badge-red">2 open risks</span>
+      <span class="badge badge-neutral">2 platforms</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <div class="toc-title">Contents</div>
+    <ol>
+      <li><a href="#summary">Summary</a></li>
+      <li><a href="#architecture">Architecture Flows</a></li>
+      <li><a href="#components">Component Comparison</a></li>
+      <li><a href="#security">Security Model</a></li>
+      <li><a href="#events">Event Coverage &amp; Latency</a></li>
+      <li><a href="#credentials">Credential Model</a></li>
+      <li><a href="#adr-evolution">ADR Evolution</a></li>
+      <li><a href="#ship-gates">Ship-Gating Risks</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <!-- ===== SUMMARY ===== -->
+    <div class="section" id="summary">
+      <h2>Summary</h2>
+      <p>
+        Fullsend dispatches AI agents in response to forge events (issues, PRs/MRs, comments, labels).
+        The two supported platforms &mdash; GitHub and GitLab &mdash; use fundamentally different
+        dispatch architectures shaped by each platform's capabilities and constraints.
+      </p>
+      <p>
+        <strong>GitHub</strong> uses a hybrid of webhooks and cron schedules. The primary dispatch path
+        is webhook-driven with sub-second latency: events flow through a <code>workflow_call</code>
+        shim into a centralized dispatcher that normalizes events into a forge-neutral
+        <code>NormalizedEvent</code>, mints ephemeral tokens via OIDC, and launches agent workflows.
+        Alongside this, cron schedules drive the prioritize scheduler (issue scoring) and scribe
+        (meeting notes &rarr; issue backlog). A planned steerwatch
+        (ADRs <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">0106</a>/<a href="https://github.com/fullsend-ai/fullsend/pull/6959">0113</a>/<a href="https://github.com/fullsend-ai/fullsend/pull/7451">0119</a>) will poll for follow-up events and absorb them mid-run,
+        replacing the current cancel-and-re-dispatch behavior &mdash; all implementation PRs are still open.
+        Platform-provided event integrity eliminates the need for cryptographic signing.
+      </p>
+      <p>
+        <strong>GitLab (current)</strong> is polling-driven with 5&ndash;15 minute latency for most events.
+        Two cron schedules discover events, a hardcoded Go router selects stages, and API-triggered
+        pipelines dispatch agent runs. HMAC-SHA256 signing protects the dispatcher&rarr;agent boundary
+        because pipeline variables are user-overridable.
+      </p>
+      <p>
+        <strong>GitLab (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>, accepted and partially implemented)</strong> adds a webhook fast-path
+        that triggers a native GitLab pipeline via a project trigger token. The poller becomes a backstop
+        for missed deliveries. Foundation work has shipped (trigger-token CRUD, CAS dedup, override-role primitives);
+        remaining work includes the dispatcher scaffold, event builder, CLI wiring, and provisioning.
+      </p>
+      <p>
+        <strong>Convergence:</strong> Both platforms are moving toward entity-first evaluation
+        (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a>), where agents reconcile current entity state rather than trusting only the
+        triggering event. On GitHub this will be paired with the steerwatch (planned in-run absorption of
+        follow-up events); on GitLab the same entity reconciliation feeds the CEL dispatch core.
+        Event normalization into a forge-neutral <code>NormalizedEvent</code> is shared across
+        both platforms via <code>harnessdispatch</code>.
+      </p>
+    </div>
+
+    <!-- ===== ARCHITECTURE FLOWS ===== -->
+    <div class="section" id="architecture">
+      <h2>Architecture Flows</h2>
+      <p>
+        Side-by-side view organized by layer. Each layer maps across platforms so
+        differences are visible at a glance. Both platforms have two routing paths:
+        a legacy hardcoded path (first-party agents only) and the CEL-based path
+        (first-party + custom agents).
+      </p>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-swatch current"></div> Implemented</div>
+        <div class="legend-item"><div class="legend-swatch planned"></div> Planned (ADR accepted)</div>
+        <div class="legend-item"><div class="legend-swatch open-risk"></div> Open risk</div>
+        <div class="legend-item"><div class="legend-swatch shared"></div> Shared / cross-platform</div>
+      </div>
+
+      <!-- LAYER 1: ENTRY POINTS -->
+      <h3>Layer 1: Entry Points</h3>
+      <div class="arch-grid">
+        <div class="arch-col gh">
+          <h4>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            GitHub
+          </h4>
+          <div class="arch-group">
+            <div class="arch-group-label">Webhook (primary &mdash; sub-second)</div>
+            <div class="arch-node current">
+              <span class="node-label">GitHub App Webhook Events</span>
+              <span class="node-detail">issues (opened, edited, labeled), issue_comment (created),<br>pull_request_target (opened, synchronize, ready_for_review, closed, labeled),<br>pull_request_review (submitted)</span>
+            </div>
+          </div>
+          <div class="arch-group" style="margin-top:0.5rem">
+            <div class="arch-group-label">Cron schedules</div>
+            <div class="arch-parallel">
+              <div class="arch-node current" style="font-size:0.75rem">
+                <span class="node-label">Prioritize Scheduler</span>
+                <span class="node-detail">*/10 * * * * &mdash; scans Projects V2 for unscored issues</span>
+              </div>
+              <div class="arch-node current" style="font-size:0.75rem">
+                <span class="node-label">Scribe</span>
+                <span class="node-detail">0 14 * * 1-4 &mdash; meeting notes &rarr; issue backlog<br>Dedicated GitHub App, Drive API</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="arch-col gl">
+          <h4>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M15.97 9.058l-.895-2.756L13.3.842a.312.312 0 00-.592 0L10.93 6.302H5.07L3.292.842a.312.312 0 00-.592 0L.925 6.302.03 9.058a.624.624 0 00.227.698L8 15.178l7.743-5.422a.624.624 0 00.227-.698"/></svg>
+            GitLab
+          </h4>
+          <div class="arch-group">
+            <div class="arch-group-label">Webhook (planned &mdash; <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</div>
+            <div class="arch-node planned">
+              <span class="node-label">Project Webhook &rarr; Trigger Token</span>
+              <span class="node-detail">Native pipeline on protected default branch<br>Payload treated as untrusted hint</span>
+            </div>
+          </div>
+          <div class="arch-group" style="margin-top:0.5rem">
+            <div class="arch-group-label">Cron schedules (current primary path)</div>
+            <div class="arch-parallel">
+              <div class="arch-node current" style="font-size:0.75rem">
+                <span class="node-label">Poller: Slash</span>
+                <span class="node-detail">*/5 &mdash; fast /fs-* note discovery</span>
+              </div>
+              <div class="arch-node current" style="font-size:0.75rem">
+                <span class="node-label">Poller: Events</span>
+                <span class="node-detail">:02,:17,:32,:47 &mdash; issues, labels, merges, MR notes</span>
+              </div>
+            </div>
+          </div>
+          <div class="arch-group" style="margin-top:0.5rem">
+            <div class="arch-group-label">Native CI event</div>
+            <div class="arch-node current" style="font-size:0.75rem">
+              <span class="node-label">MR Dispatch Pipeline</span>
+              <span class="node-detail">merge_request_event &mdash; sub-second for MR open/sync/close</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LAYER 2: SHIM + NORMALIZATION -->
+      <h3>Layer 2: Shim &amp; Normalization</h3>
+      <div class="arch-grid">
+        <div class="arch-col gh">
+          <h4>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            GitHub
+          </h4>
+          <div class="arch-node current">
+            <span class="node-label">Shim Workflow (per-repo)</span>
+            <span class="node-detail">fullsend.yml in enrolled repo<br>Filters bots, scaffold PRs, non-ready labels<br><code>workflow_call</code> &rarr; <code>fullsend-ai/fullsend/reusable-dispatch.yml</code></span>
+          </div>
+          <div class="arch-connector">&darr;</div>
+          <div class="arch-node current">
+            <span class="node-label">Event Normalization</span>
+            <span class="node-detail"><code>gha-event</code> input driver &rarr; <code>normevent.Event</code> (typed enums)<br>Maps webhook payload to forge-neutral schema</span>
+          </div>
+        </div>
+        <div class="arch-col gl">
+          <h4>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M15.97 9.058l-.895-2.756L13.3.842a.312.312 0 00-.592 0L10.93 6.302H5.07L3.292.842a.312.312 0 00-.592 0L.925 6.302.03 9.058a.624.624 0 00.227.698L8 15.178l7.743-5.422a.624.624 0 00.227-.698"/></svg>
+            GitLab
+          </h4>
+          <div class="arch-node current">
+            <span class="node-label">No shim &mdash; CI templates included directly</span>
+            <span class="node-detail"><code>include: local:</code> from <code>.gitlab/ci/</code> in enrolled repo<br>Templates scaffolded during setup</span>
+          </div>
+          <div class="arch-connector">&darr;</div>
+          <div class="arch-node current">
+            <span class="node-label">Event Normalization</span>
+            <span class="node-detail">Poller: Go <code>toNormalizedEvent()</code> + API enrichment (actor, role, labels)<br>MR dispatch: shell <code>jq</code> + <code>CI_JOB_TOKEN</code> API queries<br>Current: <code>dispatch.NormalizedEvent</code> (strings) | Desired: <code>normevent.Event</code> (enums)</span>
+          </div>
+          <div class="arch-connector">&darr;</div>
+          <div class="arch-group">
+            <div class="arch-group-label">Webhook trust boundary (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</div>
+            <div class="arch-node planned" style="font-size:0.75rem">
+              <span class="node-label">API Re-fetch + Validation</span>
+              <span class="node-detail">Re-fetch entity state via API; validate action-vs-state consistency</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LAYER 3: ROUTING -->
+      <h3>Layer 3: Routing</h3>
+      <p style="font-size:0.875rem; color:var(--text-sec); margin-bottom:0.75rem">
+        Both platforms run two routing paths in parallel. The legacy path handles only
+        first-party agents; the CEL path handles all agents including custom ones.
+        Custom agents <strong>cannot</strong> be dispatched through the legacy path.
+      </p>
+      <div class="arch-grid">
+        <div class="arch-col gh">
+          <h4>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            GitHub
+          </h4>
+          <div class="arch-node current">
+            <span class="node-label">Shell Routing (legacy, first-party only)</span>
+            <span class="node-detail">Case statements on raw <code>github.event.*</code><br>6 hardcoded stages: triage, code, fix, review, retro, prioritize<br>Custom agents: <strong>not routed</strong></span>
+          </div>
+          <div class="arch-node current" style="margin-top:0.375rem">
+            <span class="node-label">CEL Harness Eval (all agents)</span>
+            <span class="node-detail"><code>fullsend dispatch --input-driver gha-event --output-driver gha-matrix</code><br>Evaluates CEL <code>trigger:</code> on each registered harness<br>Custom agents: <strong>routed via CEL triggers</strong> (<a href="https://fullsend.sh/docs/ADRs/0061-harness-cel-dispatch">ADR 0061</a>)</span>
+          </div>
+          <div class="arch-connector">&darr; auth: collaborator permission API (<a href="https://fullsend.sh/docs/ADRs/0054-require-authorization-on-all-agent-dispatch-paths">ADR 0054</a>)</div>
+        </div>
+        <div class="arch-col gl">
+          <h4>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M15.97 9.058l-.895-2.756L13.3.842a.312.312 0 00-.592 0L10.93 6.302H5.07L3.292.842a.312.312 0 00-.592 0L.925 6.302.03 9.058a.624.624 0 00.227.698L8 15.178l7.743-5.422a.624.624 0 00.227-.698"/></svg>
+            GitLab
+          </h4>
+          <div class="arch-node current">
+            <span class="node-label">HarnessRouter (legacy, first-party + slash)</span>
+            <span class="node-detail">Hardcoded Go routing for labels, merges, comments<br>/fs-&lt;name&gt; slash commands: routes to <strong>any registered agent</strong><br>Label/merge routing: first-party only</span>
+          </div>
+          <div class="arch-node planned" style="margin-top:0.375rem">
+            <span class="node-label">CEL Harness Eval (desired, all agents)</span>
+            <span class="node-detail">Engine exists (<code>harnessdispatch</code>), used by Jira poll path<br><strong>Not yet wired to GitLab poller</strong> (<a href="https://github.com/fullsend-ai/fullsend/issues/2896">#2896</a>&ndash;#2901)<br>Custom agents: routed via CEL triggers</span>
+          </div>
+          <div class="arch-connector">&darr; auth: Members API (Developer &ge; 30, <a href="https://fullsend.sh/docs/ADRs/0054-require-authorization-on-all-agent-dispatch-paths">ADR 0054</a>)</div>
+          <div class="arch-group">
+            <div class="arch-group-label">Dedup + state persistence</div>
+            <div class="arch-node current" style="font-size:0.75rem">
+              <span class="node-label">HMAC-signed git branches</span>
+              <span class="node-detail">Branches: <code>fullsend-poll-state-slash</code>, <code>fullsend-poll-state-events</code><br>Watermarks, dispatched keys, failed keys, label state<br>CAS persist shipped (<a href="https://github.com/fullsend-ai/fullsend/pull/7812">PR #7812</a>)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LAYER 4: DISPATCH + CREDENTIALS -->
+      <h3>Layer 4: Dispatch &amp; Credentials</h3>
+      <div class="arch-grid">
+        <div class="arch-col gh">
+          <h4>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            GitHub
+          </h4>
+          <div class="arch-node current">
+            <span class="node-label">OIDC &rarr; Token Mint</span>
+            <span class="node-detail">GHA OIDC JWT &rarr; mint verifies signature + <code>job_workflow_ref</code><br>&rarr; scoped GitHub App installation token (ephemeral, per-request)</span>
+          </div>
+          <div class="arch-connector">&darr; dispatch integrity: platform-guaranteed (<code>workflow_call</code>)</div>
+          <div class="arch-node current">
+            <span class="node-label">Agent Job</span>
+            <span class="node-detail">Shell path: per-stage reusable workflow (<code>gh workflow run</code>)<br>CEL path: inline <code>harness-run</code> job via GHA matrix</span>
+          </div>
+        </div>
+        <div class="arch-col gl">
+          <h4>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M15.97 9.058l-.895-2.756L13.3.842a.312.312 0 00-.592 0L10.93 6.302H5.07L3.292.842a.312.312 0 00-.592 0L.925 6.302.03 9.058a.624.624 0 00.227.698L8 15.178l7.743-5.422a.624.624 0 00.227-.698"/></svg>
+            GitLab
+          </h4>
+          <div class="arch-node current">
+            <span class="node-label">Bot PAT (protected CI/CD variable)</span>
+            <span class="node-detail">Maintainer-role project access token, <code>api</code> scope<br>Long-lived, broad &mdash; no mint service for GitLab</span>
+          </div>
+          <div class="arch-connector">&darr; dispatch integrity: HMAC-SHA256 over 11 variables + source/user checks</div>
+          <div class="arch-node current">
+            <span class="node-label">Agent Template</span>
+            <span class="node-detail"><code>fullsend-agent.yml</code> (generic, parameterized by <code>$STAGE</code>)<br>Verifies: pipeline.source, user.id, HMAC, kill switch, role, authz</span>
+          </div>
+          <div class="arch-group" style="margin-top:0.5rem">
+            <div class="arch-group-label">Identity hardening (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</div>
+            <div class="arch-node planned" style="font-size:0.75rem">
+              <span class="node-label">CI_JOB_TOKEN Pinning</span>
+              <span class="node-detail">Replace overridable <code>CI_PROJECT_ID</code> with unforgeable job token record</span>
+            </div>
+            <div class="arch-node open-risk" style="font-size:0.75rem; margin-top:0.375rem">
+              <span class="node-label">API Base-URL Pinning</span>
+              <span class="node-detail">No unforgeable pin for <code>CI_API_V4_URL</code> &mdash; ship-gating risk</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LAYER 5: AGENT EXECUTION -->
+      <h3>Layer 5: Agent Execution &amp; In-Run Behavior</h3>
+      <div class="arch-grid">
+        <div class="arch-col gh">
+          <h4>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            GitHub
+          </h4>
+          <div class="arch-node shared">
+            <span class="node-label">fullsend run &lt;stage&gt;</span>
+            <span class="node-detail">Runner: GHA-hosted <code>ubuntu-24.04</code> (bare VM, overridable via <code>runner_image</code>)<br>Entity-first harness eval (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a>): entity (required) + event (nullable)<br>Harness resolution &rarr; Podman sandbox on runner host<br>GCP WIF for inference (OIDC, 5-min token, refresh loop)</span>
+          </div>
+          <div class="arch-group" style="margin-top:0.5rem">
+            <div class="arch-group-label">In-run steering (ADRs <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">0106</a> / <a href="https://github.com/fullsend-ai/fullsend/pull/6959">0113</a> / <a href="https://github.com/fullsend-ai/fullsend/pull/7451">0119</a>)</div>
+            <div class="arch-node planned">
+              <span class="node-label">Steerwatch (not yet implemented)</span>
+              <span class="node-detail">Will poll platform run records during execution<br>Detects follow-up events &rarr; absorbs mid-run<br>Requires: <code>cancel-in-progress: false</code> (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">ADR 0106</a>, <a href="https://github.com/fullsend-ai/fullsend/pull/7007">PR #7007</a> open)<br>Current: <code>cancel-in-progress: true</code> (agents still cancelled in-flight)</span>
+            </div>
+            <div class="arch-parallel" style="margin-top:0.375rem">
+              <div class="arch-node planned" style="font-size:0.75rem">
+                <span class="node-label">Steer Receipt</span>
+                <span class="node-detail"><a href="https://github.com/fullsend-ai/fullsend/pull/7456">PR #7456</a> &mdash; receipt + skip queued run</span>
+              </div>
+              <div class="arch-node planned" style="font-size:0.75rem">
+                <span class="node-label">Steer Default-On</span>
+                <span class="node-detail"><a href="https://github.com/fullsend-ai/fullsend/pull/7461">PR #7461</a> &mdash; opt-out with <code>steer.enabled: false</code></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="arch-col gl">
+          <h4>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M15.97 9.058l-.895-2.756L13.3.842a.312.312 0 00-.592 0L10.93 6.302H5.07L3.292.842a.312.312 0 00-.592 0L.925 6.302.03 9.058a.624.624 0 00.227.698L8 15.178l7.743-5.422a.624.624 0 00.227-.698"/></svg>
+            GitLab
+          </h4>
+          <div class="arch-node shared">
+            <span class="node-label">fullsend run &lt;stage&gt;</span>
+            <span class="node-detail">Runner: self-hosted, tag-selected &mdash; jobs run inside <code>fullsend-runner:dev</code> Docker image<br>Current: event-only harness eval<br>Desired: entity-first (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a>) &mdash; entity + event<br>Harness resolution &rarr; Podman sandbox inside Docker (DinD-like)<br>GCP WIF for inference (OIDC <code>id_tokens</code>, job-duration)</span>
+          </div>
+          <div class="arch-group" style="margin-top:0.5rem">
+            <div class="arch-group-label">In-run behavior</div>
+            <div class="arch-node current" style="font-size:0.75rem">
+              <span class="node-label">No in-run steering</span>
+              <span class="node-detail">Each poll cycle dispatches independent runs<br>Concurrency: resource groups &mdash; slash: <code>newest_first</code> (latest command wins), events: <code>oldest_first</code> (FIFO)<br>No steerwatch equivalent planned (resource groups handle serialization)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== COMPONENT COMPARISON ===== -->
+    <div class="section" id="components">
+      <h2>Component Comparison</h2>
+      <p>
+        Every architectural element mapped across platforms. The "GitLab Desired" column
+        reflects ADRs 0061, 0098, 0106, and 0125.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:16%">Component</th>
+            <th style="width:28%">GitHub</th>
+            <th style="width:28%">GitLab (Current)</th>
+            <th style="width:28%">GitLab (Desired)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Webhook events</strong></td>
+            <td>GitHub App webhooks (sub-second)</td>
+            <td>None (poller-only)</td>
+            <td>Project webhook via trigger token (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</td>
+          </tr>
+          <tr>
+            <td><strong>Cron schedules</strong></td>
+            <td>Prioritize (*/10), Scribe (Mon&ndash;Thu 14:00 UTC, dedicated App)</td>
+            <td>Slash poller (*/5), Events poller (:02,:17,:32,:47)</td>
+            <td>Same pollers as backstop</td>
+          </tr>
+          <tr>
+            <td><strong>Native CI events</strong></td>
+            <td>&mdash;</td>
+            <td><code>merge_request_event</code> pipeline (sub-second)</td>
+            <td>Same</td>
+          </tr>
+          <tr>
+            <td><strong>Dispatch trigger</strong></td>
+            <td><code>workflow_call</code> to upstream <code>reusable-dispatch.yml</code> (per-repo mode)</td>
+            <td><code>POST /projects/:id/pipeline</code> (API, bot PAT)</td>
+            <td>Same API call from poller; trigger token from webhook</td>
+          </tr>
+          <tr>
+            <td><strong>Event normalization</strong></td>
+            <td><code>gha-event</code> input driver &rarr; <code>normevent.Event</code> (typed enums). Legacy shell path also consumes raw <code>github.event.*</code> in parallel.</td>
+            <td>Go <code>toNormalizedEvent()</code> &rarr; <code>dispatch.NormalizedEvent</code> (plain strings) + API enrichment</td>
+            <td>Unified via <code>normevent.Event</code> (typed enums)</td>
+          </tr>
+          <tr>
+            <td><strong>Routing (first-party)</strong></td>
+            <td>Shell case statements (legacy) + CEL harness eval (parallel)</td>
+            <td>Hardcoded Go <code>HarnessRouter</code> (labels, merges, comments, slash)</td>
+            <td>CEL trigger expressions via <code>harnessdispatch</code> (<a href="https://fullsend.sh/docs/ADRs/0061-harness-cel-dispatch">ADR 0061</a>)</td>
+          </tr>
+          <tr>
+            <td><strong>Routing (custom)</strong></td>
+            <td>CEL path only &mdash; shell routing cannot dispatch custom agents. Per-repo install required.</td>
+            <td>Slash commands (<code>/fs-&lt;name&gt;</code>) only &mdash; label/merge routing is first-party hardcoded</td>
+            <td>CEL path handles all agents uniformly</td>
+          </tr>
+          <tr>
+            <td><strong>Deduplication</strong></td>
+            <td>GHA concurrency groups (currently <code>cancel-in-progress: true</code>; <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">ADR 0106</a> accepted but <a href="https://github.com/fullsend-ai/fullsend/pull/7007">PR #7007</a> not yet merged)</td>
+            <td>CI variable-based dispatched keys (last-writer-wins) + entity-level per-cycle</td>
+            <td>CAS poll-state persist shipped (<a href="https://github.com/fullsend-ai/fullsend/pull/7812">PR #7812</a>, <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</td>
+          </tr>
+          <tr>
+            <td><strong>Concurrency control</strong></td>
+            <td>GHA concurrency per stage &times; entity</td>
+            <td>GL resource groups: <code>fullsend-{STAGE}-{RESOURCE_KEY}</code><br>Slash: <code>newest_first</code>; Events: <code>oldest_first</code></td>
+            <td>Same resource groups</td>
+          </tr>
+          <tr>
+            <td><strong>State storage</strong></td>
+            <td>Stateless for webhook path; cron paths (prioritize, scribe) manage their own state</td>
+            <td>HMAC-signed git branches (<code>fullsend-poll-state-slash</code>, <code>fullsend-poll-state-events</code>); CAS persist (<a href="https://github.com/fullsend-ai/fullsend/pull/7812">PR #7812</a>)</td>
+            <td>Same (already migrated from CI/CD variables)</td>
+          </tr>
+          <tr>
+            <td><strong>Dispatch integrity</strong></td>
+            <td>Platform-guaranteed (<code>workflow_call</code>)</td>
+            <td>HMAC-SHA256 over 11 dispatch variables</td>
+            <td>Same HMAC, extended to webhook dispatcher</td>
+          </tr>
+          <tr>
+            <td><strong>Agent credentials</strong></td>
+            <td>OIDC &rarr; mint &rarr; ephemeral scoped token</td>
+            <td>Stored bot PAT (protected CI/CD variable)</td>
+            <td>Same PAT (no mint for GitLab)</td>
+          </tr>
+          <tr>
+            <td><strong>Inference credentials</strong></td>
+            <td>OIDC &rarr; GCP WIF (5-min token, refresh loop)</td>
+            <td>OIDC <code>id_tokens</code> &rarr; GCP WIF (job-duration)</td>
+            <td>Same</td>
+          </tr>
+          <tr>
+            <td><strong>Runner / executor</strong></td>
+            <td>GitHub-hosted runner (<code>ubuntu-24.04</code> default, overridable via <code>runner_image</code> input). Bare VM &mdash; no container wrapping the job.</td>
+            <td>Self-hosted runner, tag-selected (<code>--runner-tags</code> at install). Jobs run inside <code>fullsend-runner:dev</code> Docker image (Go, git, jq, python3).</td>
+            <td>Same</td>
+          </tr>
+          <tr>
+            <td><strong>CLI install</strong></td>
+            <td>GitHub Action (<code>install-fullsend-cli</code>)</td>
+            <td><code>before_script</code>: download from GitHub Releases (SHA256-verified) or build from source</td>
+            <td>Same</td>
+          </tr>
+          <tr>
+            <td><strong>Agent sandbox</strong></td>
+            <td>Podman on runner host</td>
+            <td>Podman inside Docker image (DinD-like)</td>
+            <td>Same</td>
+          </tr>
+          <tr>
+            <td><strong>CI template</strong></td>
+            <td>Per-stage reusable workflows in <code>fullsend-ai/fullsend</code> (per-repo mode; per-org deprecated)</td>
+            <td>Single <code>fullsend-agent.yml</code> (parameterized by <code>$STAGE</code>)</td>
+            <td>Same + dedicated webhook dispatcher include</td>
+          </tr>
+          <tr>
+            <td><strong>Harness evaluation</strong></td>
+            <td>Entity-first: <code>entity</code> (required) + <code>event</code> (nullable) per <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a></td>
+            <td>Event-only (Go router, no entity context)</td>
+            <td>Entity-first (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a>)</td>
+          </tr>
+          <tr>
+            <td><strong>Mid-run steering</strong></td>
+            <td>Steerwatch (ADRs <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">0106</a>/<a href="https://github.com/fullsend-ai/fullsend/pull/6959">0113</a>/<a href="https://github.com/fullsend-ai/fullsend/pull/7451">0119</a>): <strong>not yet implemented</strong>. All PRs open (<a href="https://github.com/fullsend-ai/fullsend/pull/7007">#7007</a>, <a href="https://github.com/fullsend-ai/fullsend/pull/6959">#6959</a>, <a href="https://github.com/fullsend-ai/fullsend/pull/7447">#7447</a>&ndash;<a href="https://github.com/fullsend-ai/fullsend/pull/7461">#7461</a>). Agents are still cancelled in-flight.</td>
+            <td>None &mdash; each poll cycle dispatches independent runs</td>
+            <td>Not planned (GitLab resource groups handle serialization)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===== SECURITY MODEL ===== -->
+    <div class="section" id="security">
+      <h2>Security Model</h2>
+      <p>
+        The platforms face different threat models because of how they expose pipeline execution.
+        GitHub's <code>workflow_call</code> provides structural guarantees; GitLab requires
+        cryptographic and procedural mitigations.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:20%">Boundary</th>
+            <th style="width:40%">GitHub</th>
+            <th style="width:40%">GitLab</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Event &rarr; dispatcher</strong></td>
+            <td>Platform-provided <code>github.event.*</code> context; unforgeable</td>
+            <td>Poller: reads API directly (trusted).<br>Webhook: payload is untrusted hint; re-fetched via API (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</td>
+          </tr>
+          <tr>
+            <td><strong>Dispatcher &rarr; agent</strong></td>
+            <td><code>workflow_call</code> guarantees the calling workflow's identity and variables</td>
+            <td>HMAC-SHA256 over dispatch variables + <code>pipeline.source == "api"</code> + <code>pipeline.user.id</code> == bot</td>
+          </tr>
+          <tr>
+            <td><strong>Agent &rarr; forge</strong></td>
+            <td>Ephemeral scoped token from mint (short-lived, narrow permissions)</td>
+            <td>Stored bot PAT with <code>api</code> scope (broad, long-lived)</td>
+          </tr>
+          <tr>
+            <td><strong>Agent &rarr; inference</strong></td>
+            <td>OIDC &rarr; GCP WIF (standard)</td>
+            <td>OIDC <code>id_tokens</code> &rarr; GCP WIF (standard)</td>
+          </tr>
+          <tr>
+            <td><strong>Identity pinning</strong></td>
+            <td>OIDC <code>job_workflow_ref</code> claim (unforgeable)</td>
+            <td>Current: <code>CI_PROJECT_ID</code> (overridable!)<br>Desired: <code>CI_JOB_TOKEN</code> job record (unforgeable)</td>
+          </tr>
+          <tr>
+            <td><strong>Debug trace guard</strong></td>
+            <td>Not needed (no stored PAT to expose)</td>
+            <td>Deny-before-admit <code>CI_DEBUG_TRACE</code> guard (implemented &mdash; runs before any token-bearing operation)</td>
+          </tr>
+          <tr>
+            <td><strong>Fork protection</strong></td>
+            <td><code>pull_request_target</code> runs base branch code; fail-closed fork check</td>
+            <td>Fork MR detection via source/target project ID comparison; block code/fix on forks</td>
+          </tr>
+          <tr>
+            <td><strong>Authorization gate</strong></td>
+            <td>Collaborator permission API (<a href="https://fullsend.sh/docs/ADRs/0054-require-authorization-on-all-agent-dispatch-paths">ADR 0054</a>)</td>
+            <td>Members API &mdash; actor must have Developer access (&ge;30); read-only stages exempt</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Trigger-Token Threat Model (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>, GitLab only)</h3>
+      <p>
+        The webhook fast-path introduces a trigger token &mdash; a credential weaker than the bot PAT
+        that can start the privileged dispatcher pipeline. Mitigations:
+      </p>
+      <ul>
+        <li>Token possession = dispatcher execution capability (treat as sensitive)</li>
+        <li>All trigger-supplied variables validated against API re-fetches</li>
+        <li>HTTP clients ignore trigger-influenced proxy and CA settings</li>
+        <li>Webhook URLs and tokens never logged</li>
+        <li>Rotation and redaction procedures required</li>
+      </ul>
+    </div>
+
+    <!-- ===== EVENT COVERAGE & LATENCY ===== -->
+    <div class="section" id="events">
+      <h2>Event Coverage &amp; Latency</h2>
+      <p>
+        What forge events trigger agent work, and how fast each platform responds.
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:22%">Event</th>
+            <th style="width:13%">GitHub</th>
+            <th style="width:18%">GitLab (Current)</th>
+            <th style="width:18%">GitLab (Desired)</th>
+            <th style="width:14%">Stages</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Issue opened</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td class="latency-none">Not supported</td>
+            <td class="latency-fast">&lt;1s (webhook)</td>
+            <td>triage</td>
+          </tr>
+          <tr>
+            <td>Issue label added</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td class="latency-slow">~15 min</td>
+            <td class="latency-fast">&lt;1s + 15m backstop</td>
+            <td>code, review, triage</td>
+          </tr>
+          <tr>
+            <td>Issue comment (/fs-*)</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td class="latency-slow">~5 min</td>
+            <td class="latency-fast">&lt;1s + 5m backstop</td>
+            <td>per command</td>
+          </tr>
+          <tr>
+            <td>Issue comment (auto)</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td class="latency-slow">~15 min</td>
+            <td class="latency-fast">&lt;1s + 15m backstop</td>
+            <td>triage</td>
+          </tr>
+          <tr>
+            <td>PR/MR opened</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td>review</td>
+          </tr>
+          <tr>
+            <td>PR/MR synchronize</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td>review</td>
+          </tr>
+          <tr>
+            <td>PR/MR label added</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td class="latency-none">Not supported</td>
+            <td class="latency-fast">&lt;1s (webhook)</td>
+            <td>review</td>
+          </tr>
+          <tr>
+            <td>PR review (changes requested)</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td class="latency-slow">~15 min</td>
+            <td class="latency-fast">&lt;1s + 15m backstop</td>
+            <td>fix</td>
+          </tr>
+          <tr>
+            <td>PR/MR merged</td>
+            <td class="latency-fast">&lt;1s</td>
+            <td class="latency-slow">~15 min</td>
+            <td class="latency-fast">&lt;1s + 15m backstop</td>
+            <td>retro</td>
+          </tr>
+          <tr>
+            <td>Scheduled prioritize</td>
+            <td class="latency-fast">cron */10</td>
+            <td class="latency-none">Not implemented</td>
+            <td class="latency-none">Not planned</td>
+            <td>prioritize</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===== CREDENTIAL MODEL ===== -->
+    <div class="section" id="credentials">
+      <h2>Credential Model</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width:22%">Aspect</th>
+            <th style="width:39%">GitHub</th>
+            <th style="width:39%">GitLab</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Primary credential</strong></td>
+            <td>GitHub App key &rarr; OIDC &rarr; mint &rarr; scoped installation token (ephemeral, per-request)</td>
+            <td>Bot PAT (Maintainer-role project access token, <code>api</code> scope, long-lived)</td>
+          </tr>
+          <tr>
+            <td><strong>Credential storage</strong></td>
+            <td>App private key in mint service (GCP Cloud Run)</td>
+            <td>Protected, masked CI/CD variable</td>
+          </tr>
+          <tr>
+            <td><strong>Credential scope</strong></td>
+            <td>Scoped per-request (repos, permissions)</td>
+            <td><code>api</code> scope (broad &mdash; narrower scopes unavailable in GitLab)</td>
+          </tr>
+          <tr>
+            <td><strong>Inference</strong></td>
+            <td>OIDC &rarr; GCP WIF (5-min token, refresh loop)</td>
+            <td>OIDC <code>id_tokens</code> &rarr; GCP WIF (job-duration token)</td>
+          </tr>
+          <tr>
+            <td><strong>Webhook credential</strong></td>
+            <td>GitHub App webhook secret (managed by GitHub)</td>
+            <td>Current: none. Desired: trigger token per project (<a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>)</td>
+          </tr>
+          <tr>
+            <td><strong>Credentials per project</strong></td>
+            <td>1 (App key shared across org)</td>
+            <td>Current: 1 (bot PAT). Desired: 2 (PAT + trigger token)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ===== ADR EVOLUTION ===== -->
+    <div class="section" id="adr-evolution">
+      <h2>ADR Evolution</h2>
+      <p>How the dispatch architecture evolved through architectural decisions.</p>
+
+      <div class="timeline">
+        <div class="timeline-entry superseded">
+          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0008-workflow-dispatch-for-cross-repo-dispatch">ADR 0008</a> &mdash; Superseded</div>
+          <div class="timeline-title"><code>workflow_dispatch</code> + PAT for cross-repo dispatch</div>
+          <div class="timeline-body">Original GitHub dispatch used a stored PAT. Replaced by the mint model.</div>
+        </div>
+        <div class="timeline-entry superseded">
+          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0028-gitlab-support">ADR 0028</a> &mdash; Deprecated</div>
+          <div class="timeline-title">GitLab support via webhook bridge</div>
+          <div class="timeline-body">Originally proposed an external translation bridge for GitLab webhooks. Superseded by cron-polling (<a href="https://fullsend.sh/docs/ADRs/0067-gitlab-cron-polling-event-dispatch">ADR 0067</a>). Credential model remains as reference.</div>
+        </div>
+        <div class="timeline-entry">
+          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0029-central-token-mint-secretless-fullsend">ADR 0029</a> &mdash; Current</div>
+          <div class="timeline-title">Central token mint + shared apps</div>
+          <div class="timeline-body">Moved GitHub App PEMs to a central mint service. Accepts OIDC JWTs, verifies <code>job_workflow_ref</code>, returns scoped tokens. Enabled <code>workflow_call</code>.</div>
+        </div>
+        <div class="timeline-entry">
+          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0041-synchronous-workflow-call-event-dispatch">ADR 0041</a> &mdash; Current</div>
+          <div class="timeline-title">Synchronous <code>workflow_call</code> dispatch</div>
+          <div class="timeline-body">Replaced async <code>workflow_dispatch</code> fan-out with synchronous <code>workflow_call</code> for better UI correlation. Partially superseded by CEL-based dispatch.</div>
+        </div>
+        <div class="timeline-entry">
+          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0054-require-authorization-on-all-agent-dispatch-paths">ADR 0054</a> &mdash; Current</div>
+          <div class="timeline-title">Authorization on all dispatch paths</div>
+          <div class="timeline-body">Requires write-level (or triage-level for observation) permission on all dispatch paths. Applies to both GitHub and GitLab.</div>
+        </div>
+        <div class="timeline-entry">
+          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0061-harness-cel-dispatch">ADR 0061</a> &mdash; Current</div>
+          <div class="timeline-title">Harness CEL triggers and dispatch drivers</div>
+          <div class="timeline-body">Harnesses declare CEL <code>trigger</code> expressions on a forge-neutral <code>NormalizedEvent</code>. Engine exists and works for GitHub + Jira; not yet wired to GitLab poller.</div>
+        </div>
+        <div class="timeline-entry">
+          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0063-polling-based-work-discovery">ADR 0063</a> &mdash; Current</div>
+          <div class="timeline-title">Polling-based work discovery</div>
+          <div class="timeline-body"><code>fullsend poll</code> reuses dispatch driver architecture. Poll input drivers discover changes, emit <code>NormalizedEvent</code>. First driver: Jira.</div>
+        </div>
+        <div class="timeline-entry">
+          <div class="timeline-date"><a href="https://fullsend.sh/docs/ADRs/0067-gitlab-cron-polling-event-dispatch">ADR 0067</a> &mdash; Current</div>
+          <div class="timeline-title">GitLab cron-polling event dispatch</div>
+          <div class="timeline-body">Two-path model: native <code>merge_request_event</code> for MRs + cron-polling for everything else. Single bot PAT, dual schedules, HMAC signing.</div>
+        </div>
+        <div class="timeline-entry">
+          <div class="timeline-date"><a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0098-entity-first-harness-evaluation">ADR 0098</a> &mdash; Current/Desired</div>
+          <div class="timeline-title">Entity-first harness evaluation</div>
+          <div class="timeline-body">CEL receives <code>entity</code> (required) + <code>event</code> (nullable). Polling discovers entity state without synthetic events. Partially supersedes event-only model.</div>
+        </div>
+        <div class="timeline-entry planned">
+          <div class="timeline-date"><a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0106-serialize-agent-runs-and-coalesce-subsequent-events">ADR 0106</a> &mdash; Accepted, not yet implemented (GitHub)</div>
+          <div class="timeline-title">Serialized agent runs and event coalescing</div>
+          <div class="timeline-body">ADR accepted (<a href="https://github.com/fullsend-ai/fullsend/pull/6909">PR #6909</a>, merged). Will change GitHub concurrency from <code>cancel-in-progress: true</code> to <code>false</code>. Implementation (<a href="https://github.com/fullsend-ai/fullsend/pull/7007">PR #7007</a>) is still <strong>open</strong>. Current codebase still cancels in-flight agents.</div>
+        </div>
+        <div class="timeline-entry planned">
+          <div class="timeline-date"><a href="https://github.com/fullsend-ai/fullsend/pull/6959">ADR 0113</a> &mdash; In-flight (GitHub)</div>
+          <div class="timeline-title">Steer running agents with mid-run updates</div>
+          <div class="timeline-body">Instead of finishing with stale context and needing a follow-up run, a running agent absorbs new events for the same work item in-flight. Implementation (<a href="https://github.com/fullsend-ai/fullsend/pull/6959">PR #6959</a>) is still <strong>open</strong>.</div>
+        </div>
+        <div class="timeline-entry planned">
+          <div class="timeline-date"><a href="https://github.com/fullsend-ai/fullsend/pull/7451">ADR 0119</a> &mdash; In-flight (GitHub)</div>
+          <div class="timeline-title">Steerwatch: poll platform run records for follow-up events</div>
+          <div class="timeline-body">The steerwatch polls the shim workflow's follow-up runs created after the current run started. Effectively an in-run poller, but scoped to a single entity. Open PRs #7447&ndash;#7461.</div>
+        </div>
+        <div class="timeline-entry">
+          <div class="timeline-date"><a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a> &mdash; Accepted, partially implemented (GitLab)</div>
+          <div class="timeline-title">Hybrid GitLab dispatch (webhook + poller backstop)</div>
+          <div class="timeline-body">ADR merged (<a href="https://github.com/fullsend-ai/fullsend/pull/7759">PR #7759</a>, Sep 28). Tracked via <a href="https://github.com/fullsend-ai/fullsend/issues/7766">epic #7766</a> (10 issues, 3 closed). Shipped: trigger-token CRUD (<a href="https://github.com/fullsend-ai/fullsend/pull/7780">#7780</a>), CAS dedup (<a href="https://github.com/fullsend-ai/fullsend/pull/7812">#7812</a>), override-role primitives (<a href="https://github.com/fullsend-ai/fullsend/pull/7813">#7813</a>). In progress: CI_JOB_TOKEN pinning (<a href="https://github.com/fullsend-ai/fullsend/pull/7817">#7817</a>). Remaining: dispatcher scaffold, event builder, CLI wiring, install/uninstall, e2e validation.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SHIP-GATING RISKS ===== -->
+    <div class="section" id="ship-gates">
+      <h2>Ship-Gating Risks</h2>
+      <p>
+        Before <a href="https://74f6b838-site.fullsend-ai.workers.dev/docs/v/dev/ADRs/0125-gitlab-hybrid-webhook-poller-dispatch">ADR 0125</a>'s webhook fast-path can ship, these items must be resolved.
+      </p>
+
+      <h3>Implementation Requirements</h3>
+      <div class="finding finding-medium">
+        <span class="badge badge-yellow">planned</span>
+        <div class="finding-title">Project-pinned API re-fetches</div>
+        <div class="finding-body">
+          Fail-closed API re-fetches with action-vs-state consistency validation.
+          Webhook payloads are untrusted hints; the dispatcher must re-derive entity
+          state from the API and validate that claimed transitions match current snapshots.
+        </div>
+      </div>
+      <div class="finding finding-resolved">
+        <span class="badge badge-green">done</span>
+        <div class="finding-title">Concurrency-safe dedup persists</div>
+        <div class="finding-body">
+          Both the webhook dispatcher and poller write to shared dispatch state.
+          CAS (compare-and-swap) poll-state persist shipped in
+          <a href="https://github.com/fullsend-ai/fullsend/pull/7812">PR #7812</a> (merged Sep 28).
+        </div>
+      </div>
+      <div class="finding finding-medium">
+        <span class="badge badge-yellow">planned</span>
+        <div class="finding-title">Dedicated webhook dispatcher CI include</div>
+        <div class="finding-body">
+          The webhook-triggered dispatcher must be a separate CI include from the
+          agent job template. This isolates the attack surface of trigger-token-initiated pipelines.
+        </div>
+      </div>
+      <div class="finding finding-medium">
+        <span class="badge badge-yellow">in progress</span>
+        <div class="finding-title">Identity pinning to CI_JOB_TOKEN</div>
+        <div class="finding-body">
+          Agent and poller gates must pin identity to the unforgeable <code>CI_JOB_TOKEN</code>
+          job record rather than overridable CI variables like <code>CI_PROJECT_ID</code>.
+          <a href="https://github.com/fullsend-ai/fullsend/pull/7817">PR #7817</a> is open.
+        </div>
+      </div>
+      <div class="finding finding-resolved">
+        <span class="badge badge-green">done</span>
+        <div class="finding-title">Deny-before-admit debug-tracing guard</div>
+        <div class="finding-body">
+          All fullsend jobs refuse to start under debug tracing. The <code>CI_DEBUG_TRACE</code>
+          guard runs at the top of the agent template, before any token-bearing operation.
+        </div>
+      </div>
+      <div class="finding finding-low">
+        <span class="badge badge-yellow">planned</span>
+        <div class="finding-title">Transport hardening</div>
+        <div class="finding-body">
+          HTTP clients must ignore trigger-influenced proxy and CA settings.
+          Prevents a trigger-token holder from MITM'ing API calls.
+        </div>
+      </div>
+      <div class="finding finding-low">
+        <span class="badge badge-yellow">partially done</span>
+        <div class="finding-title">Trigger-token rotation and redaction</div>
+        <div class="finding-body">
+          Trigger-token and webhook CRUD primitives shipped in
+          <a href="https://github.com/fullsend-ai/fullsend/pull/7780">PR #7780</a> (merged Sep 28).
+          Remaining: install-time provisioning (<a href="https://github.com/fullsend-ai/fullsend/issues/7772">#7772</a>),
+          operational rotation procedures, and log-redaction guarantees.
+        </div>
+      </div>
+
+      <h3>Open Risks (no solution yet)</h3>
+      <div class="finding finding-high">
+        <span class="badge badge-red">open</span>
+        <div class="finding-title">API base-URL pinning</div>
+        <div class="finding-body">
+          No unforgeable pin exists for the GitLab API base URL. The
+          <code>CI_API_V4_URL</code> variable is overridable, meaning a trigger-token
+          holder could potentially redirect API re-fetch calls to a malicious endpoint.
+          This undermines the entire re-fetch trust model.
+        </div>
+      </div>
+      <div class="finding finding-high">
+        <span class="badge badge-red">open</span>
+        <div class="finding-title">Snapshot-consistent replay</div>
+        <div class="finding-body">
+          An attacker holding the trigger token could replay actions that still match
+          current entity state. Polling-based event-time binding and dedup narrow this
+          window but don't close it entirely.
+        </div>
+      </div>
+    </div>
+
+  </main>
+</body>
+</html>
